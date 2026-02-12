@@ -1,0 +1,554 @@
+
+			   ╔═════════════════════▣◎▣═════════════════════╗
+					     Dashbaord
+			   ╚═════════════════════▣◎▣═════════════════════╝
+
+
+🍀 INTRODUCTION
+
+Question It Answer will be : "How is the market?"
+Dashboard should have ONLY 3 jobs:
+
+1. State of the market
+2. Who is winning / losing
+3. Where opportunity & risk exist
+
+🍀DASHBOARD DESIGN
+
+We will divide Dashbaord into 3 Sections : 
+
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+      i) TOP SECTION - HERO KPIs (Executive Snapshot)  
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+Here we will have following KPIs. For Each KPIs We will ask 5 question.
+
+ 
+1. What we can do?        
+2. Why to do?
+3. How to do? (From our data)
+4. How we show it?
+5. How LLM uses it?
+
+╔════════════════════════════════════╗
+      KPI-1. Total Dealers
+╚════════════════════════════════════╝
+
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Total Dealers
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows market coverage
+► Tells scale of competition
+► First number every executive expects
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: dealer_sales_summary_simple.cs
+► Logic: COUNT(DISTINCT canonical_dealer_id)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI number
+► Label: Total Dealers
+► Optional subtitle: Active dealers in dataset
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► The market consists of 15,818 active dealers, indicating a highly competitive environment.
+ 
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔════════════════════════════════════╗
+      KPI-2. Total Sales
+╚════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Total Sales
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Measures actual market demand
+► Core business performance signal
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: dealer_sales_summary_simple.csv
+► Column used: total_sales
+► SUM(total_sales)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI
+► Currency or unit-neutral (Vehicles Sold)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Total market sales reached 1.3M vehicles, reflecting strong buyer activity.
+
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔════════════════════════════════════╗
+      KPI-3. Active Inventory
+╚════════════════════════════════════╝
+
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Active Inventory
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows supply
+► Critical when compared with sales
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: dealer_sales_summary_simple.csv
+► Column: active_inventory
+► SUM(active_inventory)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI
+► Purple / neutral color
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Inventory levels remain high, increasing competitive pressure among dealers.
+
+                                       🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                        
+                                        
+╔════════════════════════════════════╗
+    KPI-4. Inventory to Sale Ratio
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Inventory-to-Sales Ratio
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Tells market pressure
+► =1  → Balance
+► >1  → Oversupply
+► <1  → Undersupply
+
+This single KPI explains pricing power.
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► From dealer_sales_summary_simple.csv
+► Inventory-to-Sales Ratio = SUM(active_inventory) / SUM(total_sales)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI number (e.g. 1.06)
+► Badge:
+
+ ►🟢 < 0.9  
+ ►🟡 0.9–1.1
+ ►🔴 > 1.1
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► With an inventory-to-sales ratio above 1, the market is experiencing oversupply, leading to pricing pressure.
+
+					 🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+╔════════════════════════════════════╗
+    KPI-5. Average Sales per Dealer
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Avg Sales per Dealer
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows dealer productivity
+► Normalizes market size
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Avg Sales per Dealer = SUM(total_sales) / COUNT(DISTINCT canonical_dealer_id)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI number
+► Small sparkline optional
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► On average, each dealer sold 82 vehicles, highlighting moderate dealer productivity.”  
+                                        
+                                       🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                       
+╔════════════════════════════════════╗
+       KPI-6. Sales Velocity
+╚════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Sales Velocity
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Measures how fast inventory converts into sales
+► Separates high-performing dealers from large-inventory dealers
+► Explains why some dealers win even with similar inventory levels
+► Strong indicator of pricing power and operational efficiency
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: `dealer_sales_summary_simple.csv`
+► Columns used:
+    • `total_sales`
+    • `active_inventory`
+
+► Formula:
+Sales Velocity = total_sales / active_inventory
+► Calculation scope:
+    • Per dealer
+    • Market-level average (optional)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Displayed inside tables, not as a hero KPI
+► Shown as a numeric ratio (e.g. `1.18`)
+► Color indicator:
+    ► 🟢 High velocity ( > 1.2 )
+    ► 🟡 Average ( 0.8 – 1.2 )
+    ► 🔴 Slow moving ( < 0.8 )
+
+► Used in:
+    • Top Market Leaders table
+    • Competitor Intel comparisons
+    
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Top-performing dealers maintain higher sales velocity, converting inventory into sales faster than the market average
+► Despite similar inventory levels, this competitor outperforms due to stronger sales velocity.
+                                      🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+      ii) MIDDLE SECTION - MARKET STRUCTURE & TRENDS
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+╔════════════════════════════════════╗
+  Chart-1. Sales vs Inventory Trend
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: Sales vs Inventory (Line Chart)
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows supply–demand balance
+► Reveals pressure early
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Using last_updated from both summary tables.
+► Aggregate by date:
+	► Daily Sales = SUM(total_sales)
+	► Daily Inventory = SUM(active_inventory)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dual-line chart
+	► X-axis: Date
+	► Y-axis: Units
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Inventory growth is outpacing sales over recent periods, suggesting rising competition.”
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+
+╔════════════════════════════════════╗
+  Chart-2. Segment Share of Sales
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+Chart: Sales by Segment (SUV, Sedan, Truck…)
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows what buyers want
+► Critical for strategy
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Join: 
+	► dealer_make_model_summary_simple.csv
+	► Make_Model_BodyStyle.csv
+
+► Steps:
+	► Map (neo_make, neo_model) → bodyStyle
+	► Group by bodyStyle
+	► Sum total_sales
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Bar chart (NOT pie)
+► Sorted descending
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► SUVs dominate market demand, accounting for the largest share of total sales.
+
+SUV
+Sedan
+Hatchback
+Coupe
+Wagon
+Convertible
+Van
+Truck
+
+
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔═══════════════════════════════════════════════════════════════╗
+    Chart-3. Dealer Concentration (Competition Intensity)
+╚═══════════════════════════════════════════════════════════════╝
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: % of sales from Top 10% dealers
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows winner-take-all vs fragmented
+► Helps OEMs & investors
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Steps:
+	► Rank dealers by total_sales
+	► Take top 10%
+► Compute:
+	► Concentration % = (SUM(top_10_percent_sales) / SUM(total_sales)) × 100
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI or donut chart
+► Label: Market Concentration
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► A small group of dealers controls a significant share of total market sales.
+
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+            
+                                   
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+    iii) BOTTOM SECTION- LEADERS, WINNERS, OPPORTUNITIES
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+
+╔═══════════════════════════════════════════════════════════════╗
+                  Table-1: Top Market Leaders
+╚═══════════════════════════════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table: Top 10 Dealers by Sales
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Identifies who sets the market
+► Anchor reference
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► From dealer_sales_summary_simple.csv
+► Sort by: total_sales DESC
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Columns:
+        ► Canonical ID
+	► Dealer Name
+	► City / State
+	► Total Sales
+	► Active Inventory
+	► Unique Models
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Top-performing dealers consistently combine high inventory depth with strong model diversity.
+
+                                🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                		
+╔═══════════════════════════════════════════════════════════════╗
+                 Table-2: Fastest Rising Dealers
+╚═══════════════════════════════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Insight: Fastest Growing Dealers
+
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Detects momentum
+► Early warning system
+
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Using last_updated snapshots:
+► Sales Growth = current_total_sales − previous_total_sales
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table
+► Growth arrows ↑↓
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Several mid-sized dealers are rapidly gaining market share, signaling aggressive expansion strategies.
+
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+╔═══════════════════════════════════════════════════════════════╗
+               Table-3: Top States by Opportunity
+╚═══════════════════════════════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: State Opportunity Index
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows where to zoom next
+► Guides Market Map usage
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+
+► Per state:
+► Opportunity Score = (total_sales / dealer_count) × (1 / inventory_to_sales_ratio)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Bar chart or US map
+► Color-coded
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► California and Texas present the strongest opportunities due to high sales volume and efficient inventory turnover.”
+
+
+                                      🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                      
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+              DASHBOARD: LLM Market Summary 
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+LLM INPUT:
+
+►  KPIs
+►  Segment sales
+►  Inventory pressure
+►  Market concentration
+►  Top states
+
+LLM OUTPUT:
+
+The automotive market shows strong demand led by SUVs, while inventory levels slightly exceed sales, indicating competitive pressure. A small group of high-performing dealers dominates overall sales, though emerging players are gaining traction in key states such as Texas and Florida.
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
+	
