@@ -14,7 +14,7 @@ export default function DashboardTable({ title, columns = [], rows = [], compact
       </div>
 
       <div style={{ maxHeight: typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight, overflowY: 'auto', overflowX: wrap ? 'hidden' : 'auto' }}>
-        <table className={`w-full table-fixed ${compact ? 'text-sm' : 'text-base'}`}>
+        <table className={`w-full ${wrap ? 'table-auto' : 'table-fixed'} ${compact ? 'text-sm' : 'text-base'}`}>
           <thead className="bg-slate-50">
             <tr className={`${headerClass} text-slate-600`}>
               {columns.map(col => (

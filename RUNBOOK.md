@@ -54,6 +54,14 @@ Test an authenticated endpoint (should return JSON):
 curl -i -u competitor_admin:s7t6u5v4 "http://<server-ip>:8082/dashboard/kpis?scope=USA&time_range=30d"
 ```
 
+Inventory Analysis endpoints (should return JSON):
+
+```bash
+curl -i -u competitor_admin:s7t6u5v4 "http://<server-ip>:8082/inventory_analysis/summary?scope=USA&time_range=30d"
+curl -i -u competitor_admin:s7t6u5v4 "http://<server-ip>:8082/inventory_analysis/structure_trends?scope=USA&time_range=30d&top_n=10"
+curl -i -u competitor_admin:s7t6u5v4 "http://<server-ip>:8082/inventory_analysis/leaders?scope=USA&time_range=30d&limit=10"
+```
+
 If you get `401 Unauthorized`, the credentials are wrong or you are running an old backend process.
 
 ---
@@ -93,9 +101,9 @@ Vite will print a URL. Use the server IP:
 ## 3) Logging In
 
 1. Open:
-   - `http://<server-ip>:5174/`
+   - `http://<server-ip>:5173/`
 2. You will be redirected to:
-   - `http://<server-ip>:5174/login`
+   - `http://<server-ip>:5173/login`
 3. Click **Sign In**
    - Username/password are fixed and prefilled.
    - API URL is auto-detected.
@@ -115,7 +123,7 @@ Share:
 
 Requirements:
 - Server must allow inbound connections to:
-  - TCP `5174` (frontend)
+  - TCP `5173` (frontend)
   - TCP `8082` (backend)
 
 ---

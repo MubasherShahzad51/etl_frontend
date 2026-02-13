@@ -225,8 +225,9 @@ const MiniSpark = ({ data = [], tone = 'auto', width = 84, height = 12 }) => {
 const MarketDashboard = () => {
   const navigate = useNavigate()
   const [scope, setScope] = useState('USA')
-  const [territoryState, setTerritoryState] = useState('')
+  const [territoryState, setTerritoryState] = useState('CA')
   const [timeRange, setTimeRange] = useState('30d')
+  const [trendRange, setTrendRange] = useState('30d')
   const [dealers, setDealers] = useState([])
   const [bodyStyleMap, setBodyStyleMap] = useState(new Map())
   const [loading, setLoading] = useState(true)
@@ -269,7 +270,6 @@ const MarketDashboard = () => {
     return () => { active = false }
   }, [])
 
-
   const states = useMemo(() => {
     const set = new Set(dealers.map((d) => d.state).filter(Boolean))
     return Array.from(set).sort()
@@ -279,6 +279,14 @@ const MarketDashboard = () => {
     if (!territoryState && states.length) setTerritoryState(states[0])
   }, [territoryState, states])
 
+  useEffect(() => {
+    // Keep the trend chart in sync with the Territory date range selector.
+    // (We only support these ranges in the chart toggle.)
+    if (timeRange === '30d' || timeRange === '60d' || timeRange === '3m') {
+      setTrendRange(timeRange)
+    }
+  }, [timeRange])
+
   const filteredDealers = useMemo(() => {
     if (scope === 'USA') return dealers
     return dealers.filter((d) => d.state === territoryState)
@@ -287,7 +295,7 @@ const MarketDashboard = () => {
   const [apiKpis, setApiKpis] = useState(null)
   const [apiTopModels, setApiTopModels] = useState(null)
   const [apiLeaders, setApiLeaders] = useState(null)
-  const [apiFastestRising, setApiFastestRising] = useState(null)
+  const [apiSalesInvTrend, setApiSalesInvTrend] = useState(null)
   const [apiSegmentShare, setApiSegmentShare] = useState(null)
   const [apiTopTrends, setApiTopTrends] = useState(null)
   const [apiMarketHighlights, setApiMarketHighlights] = useState(null)
@@ -482,7 +490,7 @@ const MarketDashboard = () => {
     let alive = true
     const loadLeaders = async () => {
       try {
-        const params = { scope, time_range: timeRange, limit: 10 }
+        const params = { scope, time_range: timeRange, limit: 8 }
         if (scope === 'State') params.state = territoryState
         const res = await api.get('/dashboard/top_market_leaders', { params })
         const data = res?.data
@@ -495,26 +503,6 @@ const MarketDashboard = () => {
       }
     }
     loadLeaders()
-    return () => { alive = false }
-  }, [scope, territoryState, timeRange])
-
-  useEffect(() => {
-    let alive = true
-    const loadRising = async () => {
-      try {
-        const params = { scope, time_range: timeRange, limit: 10 }
-        if (scope === 'State') params.state = territoryState
-        const res = await api.get('/dashboard/fastest_rising_dealers', { params })
-        const data = res?.data
-        if (!alive) return
-        if (data && data.success) {
-          setApiFastestRising(Array.isArray(data.rows) ? data.rows : [])
-        }
-      } catch (e) {
-        if (!alive) return
-      }
-    }
-    loadRising()
     return () => { alive = false }
   }, [scope, territoryState, timeRange])
 
@@ -538,6 +526,26 @@ const MarketDashboard = () => {
     return () => { alive = false }
   }, [scope, territoryState, timeRange])
 
+  useEffect(() => {
+    let alive = true
+    const loadTrend = async () => {
+      try {
+        const params = { scope, time_range: trendRange }
+        if (scope === 'State') params.state = territoryState
+        const res = await api.get('/dashboard/sales_inventory_trend', { params })
+        const data = res?.data
+        if (!alive) return
+        if (data && data.success) {
+          setApiSalesInvTrend(Array.isArray(data.rows) ? data.rows : [])
+        }
+      } catch (e) {
+        if (!alive) return
+      }
+    }
+    loadTrend()
+    return () => { alive = false }
+  }, [scope, territoryState, trendRange])
+
   const dealerCountComputed = useMemo(() => {
     const ids = new Set(filteredDealers.map((d) => d.canonical_dealer_id))
     return ids.size
@@ -558,6 +566,7 @@ const MarketDashboard = () => {
   const timeLabel = useMemo(() => {
     switch (timeRange) {
       case '3m': return 'Last 3 months'
+      case '60d': return 'Last 60 days'
       case '6m': return 'Last 6 months'
       case 'yoy': return 'Year-over-Year'
       case '30d':
@@ -566,7 +575,7 @@ const MarketDashboard = () => {
   }, [timeRange])
 
   const trendSeries = useMemo(() => {
-    const lengthMap = { '30d': 30, '3m': 90, '6m': 180, 'yoy': 365 }
+    const lengthMap = { '30d': 30, '60d': 60, '3m': 90, '6m': 180, 'yoy': 365 }
     const length = lengthMap[timeRange] || 30
     const baseSales = totalSales / Math.max(1, length)
     const baseInventory = activeInventory / Math.max(1, length)
@@ -686,7 +695,6 @@ const MarketDashboard = () => {
   }, [apiTopModels, filteredDealers, scope, territoryState, bodyStyleMap])
 
   const gainingModels = useMemo(() => modelRank.list.filter((m) => (m.mom + m.qoq) > 0).slice(0, 4), [modelRank])
-  const losingModels = useMemo(() => modelRank.list.filter((m) => (m.mom + m.qoq) < 0).slice(0, 4), [modelRank])
 
   const segmentShare = useMemo(() => {
     const totals = new Map()
@@ -726,7 +734,7 @@ const MarketDashboard = () => {
     if (Array.isArray(apiLeaders) && apiLeaders.length) return apiLeaders
     return [...filteredDealers]
       .sort((a, b) => toNumber(b.total_sales) - toNumber(a.total_sales))
-      .slice(0, 10)
+      .slice(0, 8)
       .map((d) => {
         const velocity = toNumber(d.active_inventory) > 0 ? (toNumber(d.total_sales) / toNumber(d.active_inventory)) : 0
         return {
@@ -734,6 +742,9 @@ const MarketDashboard = () => {
           make: (splitList(d.top_5_makes)[0] || '').trim(),
           location: `${d.city}, ${d.state}`,
           totalSales: toNumber(d.total_sales),
+          mom: 0,
+          last30: toNumber(d.total_sales),
+          last3m: toNumber(d.total_sales) * 3,
           activeInventory: toNumber(d.active_inventory),
           uniqueModels: toNumber(d.unique_models_count),
           salesVelocity: velocity,
@@ -741,26 +752,20 @@ const MarketDashboard = () => {
       })
   }, [apiLeaders, filteredDealers])
 
-  const fastestRising = useMemo(() => {
-    if (Array.isArray(apiFastestRising) && apiFastestRising.length) return apiFastestRising
-    return [...filteredDealers]
-      .map((d) => {
-        const confirmed = toNumber(d.confirmed_sales)
-        const potential = toNumber(d.potential_sales)
-        const growth = potential - confirmed
-        const pctGrowth = confirmed > 0 ? (growth / confirmed) * 100 : 0
-        return {
-          id: d.canonical_dealer_id,
-          dealerName: d.seller_name,
-          location: `${d.city}, ${d.state}`,
-          totalSales: toNumber(d.total_sales),
-          growth,
-          pctGrowth,
-        }
-      })
-      .sort((a, b) => b.growth - a.growth)
-      .slice(0, 10)
-  }, [apiFastestRising, filteredDealers])
+  const salesInventoryTrendSeries = useMemo(() => {
+    if (Array.isArray(apiSalesInvTrend) && apiSalesInvTrend.length) {
+      return apiSalesInvTrend.map((r) => ({
+        name: String(r.name || ''),
+        sales: r.sales === null || r.sales === undefined ? Number.NaN : toNumber(r.sales),
+        inventory: r.inventory === null || r.inventory === undefined ? Number.NaN : toNumber(r.inventory),
+      }))
+    }
+    // fallback: derive from totals when API not available
+    const months = trendRange === '3m' ? ['Oct', 'Nov', 'Dec'] : trendRange === '60d' ? ['Nov', 'Dec'] : ['Dec']
+    const perMonthSales = totalSales / Math.max(1, months.length)
+    const perMonthInv = activeInventory / Math.max(1, months.length)
+    return months.map((m) => ({ name: m, sales: perMonthSales, inventory: perMonthInv }))
+  }, [apiSalesInvTrend, totalSales, activeInventory, trendRange])
 
   const segmentShareChartData = useMemo(() => {
     if (Array.isArray(apiSegmentShare) && apiSegmentShare.length) {
@@ -851,25 +856,27 @@ const MarketDashboard = () => {
     { key: 'dealerName', label: 'Dealer Name' },
     { key: 'make', label: 'Make' },
     { key: 'location', label: 'City / State' },
-    { key: 'totalSales', label: 'Total Sales', render: (v) => fmtInt(v) },
-    { key: 'activeInventory', label: 'Active Inventory', render: (v) => fmtInt(v) },
-    { key: 'uniqueModels', label: 'Unique Models' },
+    { key: 'totalSales', label: 'Total Sales', className: 'text-right', cellClassName: 'text-right tabular-nums', render: (v) => fmtInt(v) },
     {
-      key: 'salesVelocity', label: 'Sales Velocity', render: (v) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${velocityTone(v)}`}>{v.toFixed(2)}</span>
+      key: 'mom',
+      label: 'MoM',
+      className: 'text-right',
+      cellClassName: 'text-right tabular-nums',
+      render: (v) => (
+        <span className={`tabular-nums ${trendClass(v)}`}>{pct(v)}</span>
       )
     },
-  ]
-
-  const risingColumns = [
-    { key: 'dealerName', label: 'Dealer Name' },
-    { key: 'location', label: 'City / State' },
-    { key: 'totalSales', label: 'Total Sales', render: (v) => fmtInt(v) },
+    { key: 'last30', label: 'Last 30 Days', className: 'text-right', cellClassName: 'text-right tabular-nums', render: (v) => fmtInt(v) },
+    { key: 'last3m', label: 'Last 3 Months', className: 'text-right', cellClassName: 'text-right tabular-nums', render: (v) => fmtInt(v) },
+    { key: 'activeInventory', label: 'Active Inventory', className: 'text-right', cellClassName: 'text-right tabular-nums', render: (v) => fmtInt(v) },
+    { key: 'uniqueModels', label: 'Unique Models', className: 'text-right', cellClassName: 'text-right tabular-nums' },
     {
-      key: 'growth', label: 'Growth', render: (v, row) => (
-        <span className={`font-semibold ${v >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-          {v >= 0 ? '▲' : '▼'} {fmtInt(Math.abs(v))} ({row.pctGrowth >= 0 ? '+' : ''}{row.pctGrowth.toFixed(1)}%)
-        </span>
+      key: 'salesVelocity',
+      label: 'Sales Velocity',
+      className: 'text-right',
+      cellClassName: 'text-right',
+      render: (v) => (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${velocityTone(v)}`}>{v.toFixed(2)}</span>
       )
     },
   ]
@@ -1101,20 +1108,13 @@ const MarketDashboard = () => {
         </aside>
 
         <main className="flex flex-col gap-3 min-h-0 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)] gap-3 flex-1 min-h-0">
-            <div className="rounded-2xl border border-slate-200 bg-white p-1.5 flex flex-col min-h-0">
+          <div className="grid grid-cols-1 gap-3 flex-1 min-h-0">
+            <div className="rounded-2xl border border-slate-200 bg-white p-2 flex flex-col min-h-0">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-[12px] font-semibold text-slate-900">Top Selling Models</div>
                   <div className="text-[10px] text-slate-500">All makes • {scope === 'USA' ? 'USA' : territoryState}</div>
                 </div>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {(apiTopModels?.topMakes?.length ? apiTopModels.topMakes : modelRank.topMakes).map((m) => (
-                  <span key={m.name} className="text-[9.5px] px-1.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-                    {m.name}: {fmtInt(m.value)}
-                  </span>
-                ))}
               </div>
               <div className="mt-1 flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-100">
                 <table className="w-full">
@@ -1129,7 +1129,7 @@ const MarketDashboard = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[10px]">
                     {(apiTopModels?.models?.length ? apiTopModels.models : modelRank.list)
-                      .slice(0, 15)
+                      .slice(0, 8)
                       .map((m) => (
                         <tr key={m.key} className="hover:bg-slate-50">
                           <td className="px-2 py-1 font-medium text-slate-900 truncate">{m.make} {m.model}</td>
@@ -1143,10 +1143,11 @@ const MarketDashboard = () => {
                 </table>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-1.5 flex flex-col min-h-0">
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-2 flex flex-col min-h-0">
               <h3 className="text-[12px] font-semibold text-slate-900 mb-1.5">Top Market Leaders</h3>
               <div className="flex-1 min-h-0 overflow-y-auto">
-                <DataTable columns={leaderColumns} data={topLeaders} sortable paginated={false} density="compact" tableLayout="fixed" />
+                <DataTable columns={leaderColumns} data={topLeaders} sortable paginated={false} density="compact" tableLayout="auto" />
               </div>
               <div className="mt-1 text-[9.5px] text-slate-500">
                 Sales velocity legend: <span className="text-emerald-700">High &gt; 1.2</span> · <span className="text-amber-700">Average 0.8–1.2</span> · <span className="text-rose-700">Slow &lt; 0.8</span>
@@ -1154,42 +1155,83 @@ const MarketDashboard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)] gap-3 flex-1 min-h-0">
-            <div className="rounded-2xl border border-slate-200 bg-white p-1 flex flex-col min-h-0 max-h-[315px]">
-              <div className="flex items-center justify-between mb-1">
-                <div>
-                  <div className="text-[12px] font-semibold text-slate-900">Fastest Rising Dealers</div>
-                  <div className="text-[9.5px] text-slate-500">Momentum leaders • {timeLabel}</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 min-h-0">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col min-h-0 h-[315px]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-slate-900">Sales vs Inventory Trend</div>
+                  <div className="text-[10px] text-slate-500">Shows supply–demand balance and reveals pressure early</div>
+                </div>
+                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => { setTrendRange('30d'); setTimeRange('30d') }}
+                    className={`px-3 py-1 rounded-lg font-semibold ${trendRange === '30d' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    30 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTrendRange('60d'); setTimeRange('60d') }}
+                    className={`px-3 py-1 rounded-lg font-semibold ${trendRange === '60d' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    60 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTrendRange('3m'); setTimeRange('3m') }}
+                    className={`px-3 py-1 rounded-lg font-semibold ${trendRange === '3m' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    3 Months
+                  </button>
                 </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <DataTable columns={risingColumns} data={fastestRising} sortable paginated={false} density="compact" />
+
+              <div className="mt-3 flex-1 min-h-0">
+                <div className="h-[235px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={salesInventoryTrendSeries} margin={{ top: 10, right: 16, left: 12, bottom: 6 }}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 11, fill: '#64748b' }}
+                        width={64}
+                        tickFormatter={(v) => (Number.isFinite(Number(v)) ? fmtInt(v) : '')}
+                      />
+                      <Tooltip formatter={(v) => (Number.isFinite(Number(v)) ? fmtInt(v) : '')} />
+                      <Line connectNulls type="monotone" dataKey="sales" name="Monthly Sales" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      <Line connectNulls type="monotone" dataKey="inventory" name="Monthly Inventory" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col min-h-0 max-h-[315px]">
-              <div className="mb-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col min-h-0 h-[315px]">
+              <div className="mb-1">
                 <div className="text-[13px] font-semibold text-slate-900">Segment Share of Sales</div>
                 <div className="text-[10px] text-slate-500">Shows what buyers want - Critical for strategy</div>
               </div>
 
               <div className="flex-1 min-h-0">
-                <div className="h-[260px]">
+                <div className="h-[270px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
                       data={segmentShareChartData}
-                      margin={{ top: 6, right: 28, left: 16, bottom: 6 }}
+                      margin={{ top: 6, right: 18, left: 0, bottom: 6 }}
                     >
                       <CartesianGrid horizontal={false} vertical={false} />
                       <XAxis type="number" tickLine={false} axisLine={false} hide />
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={140}
+                        width={120}
                         tick={{ fill: '#374151', fontSize: 13, fontWeight: 700 }}
                         axisLine={false}
                         tickLine={false}
-                        tickMargin={14}
+                        tickMargin={10}
                         interval={0}
                       />
                       <Tooltip formatter={(v) => `${v}%`} />

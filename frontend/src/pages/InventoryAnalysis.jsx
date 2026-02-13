@@ -1,536 +1,685 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Boxes,
+  Building2,
+  ChevronRight,
+  Globe2,
+  Layers,
+  LineChart,
+  Package,
+  Scale,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { Card, MetricCard } from '../components/common';
 import DashboardTable from '../components/common/DashboardTable';
-import { MakeDistributionChart, SegmentBarChart } from '../components/charts';
-import Papa from 'papaparse';
+import { SegmentBarChart } from '../components/charts';
+import TerritoryFilters from '../components/filters/TerritoryFilters';
+import api from '../services/api';
 
 
-// Utility: Parse CSV robustly using PapaParse
-function parseCsv(text) {
-  if (!text) return [];
-  const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-  // Normalize keys: trim, lowercase, replace spaces/underscores
-  return result.data.map(row => {
-    const norm = {};
-    Object.entries(row).forEach(([k, v]) => {
-      const key = k.trim().toLowerCase().replace(/\s+/g, '_');
-      norm[key] = v;
-    });
-    return norm;
-  });
-}
+const toNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fmtInt = (v) => Math.round(toNumber(v)).toLocaleString();
+
+
+const fmtPct = (v, digits = 1) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return `${n.toFixed(digits)}%`;
+};
+
+const safeText = (v) => String(v || '').trim();
+
+const ratioTone = (ratio) => {
+  if (!Number.isFinite(ratio)) return { label: '—', cls: 'bg-slate-50 border-slate-200 text-slate-600' };
+  if (ratio < 0.9) return { label: 'Tight', cls: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
+  if (ratio <= 1.1) return { label: 'Balanced', cls: 'bg-amber-50 border-amber-200 text-amber-700' };
+  return { label: 'Oversupply', cls: 'bg-rose-50 border-rose-200 text-rose-700' };
+};
+
+const COLORS = ['#6366f1', '#0ea5e9', '#f59e0b', '#22c55e', '#f43f5e', '#a21caf', '#e11d48', '#0d9488', '#facc15', '#64748b'];
+
+const chartTooltipStyle = {
+  background: 'rgba(255,255,255,0.95)',
+  border: '1px solid rgb(226 232 240)',
+  borderRadius: 10,
+  padding: 10,
+  fontSize: 11,
+};
 
 
 const InventoryAnalysis = () => {
-  const [dealers, setDealers] = useState([]);
-  const [bodyStyles, setBodyStyles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState('overview');
+  const [scope, setScope] = useState('USA');
+  const [territoryState, setTerritoryState] = useState('');
+  const [timeRange, setTimeRange] = useState('30d');
+
+  const [summary, setSummary] = useState(null);
+  const [structure, setStructure] = useState(null);
+  const [leaders, setLeaders] = useState(null);
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const base = import.meta.env.BASE_URL || '/';
-    Promise.all([
-      fetch(`${base}dealer_sales_summary_simple.csv`).then(r => r.text()),
-      fetch(`${base}Make_Model_BodyStyle.csv`).then(r => r.text()),
-    ]).then(([dealerCsv, bodyCsv]) => {
-      setDealers(parseCsv(dealerCsv));
-      setBodyStyles(parseCsv(bodyCsv));
-      setError('');
-    }).catch(() => setError('Failed to load data'))
-      .finally(() => setLoading(false));
-  }, []);
+    setError('');
 
+    const load = async () => {
+      try {
+        const params = { scope, time_range: timeRange };
+        if (String(scope || '').toLowerCase() === 'state') params.state = territoryState;
 
-  // Metrics
-  const totalDealers = useMemo(() => {
-    if (!dealers.length) return 0;
-    // Prefer canonical_dealer_id, but fall back to other IDs if needed
-    const ids = new Set(
-      dealers.map(d => d.canonical_dealer_id || d.mc_dealer_id || d.mc_rooftop_id || d.mc_location_id),
-    );
-    return ids.size;
-  }, [dealers]);
+        const [
+          resTerritories,
+          resKpis,
+          resHealth,
+          resTrend,
+          resMakeMix,
+          resModelMix,
+          resByState,
+          resTopInv,
+          resOver,
+          resUnder,
+          resEff,
+          resOpp,
+        ] = await Promise.all([
+          api.get('/inventory_analysis/territories', { params: { time_range: timeRange } }),
+          api.get('/inventory_analysis/kpis_overview', { params }),
+          api.get('/inventory_analysis/health', { params }),
+          api.get('/inventory_analysis/chart_inventory_vs_sales_trend', { params }),
+          api.get('/inventory_analysis/chart_make_mix', { params: { ...params, top_n: 10 } }),
+          api.get('/inventory_analysis/chart_model_mix', { params: { ...params, top_n: 10 } }),
+          api.get('/inventory_analysis/chart_inventory_by_state', { params: { ...params, top_n: 12 } }),
+          api.get('/inventory_analysis/top_inventory_holders', { params: { ...params, limit: 10 } }),
+          api.get('/inventory_analysis/overstocked_dealers', { params: { ...params, limit: 10 } }),
+          api.get('/inventory_analysis/understocked_dealers', { params: { ...params, limit: 10 } }),
+          api.get('/inventory_analysis/efficient_managers', { params: { ...params, limit: 10 } }),
+          api.get('/inventory_analysis/opportunity_states', { params: { ...params, limit: 10 } }),
+        ]);
 
-  const totalSales = useMemo(
-    () => dealers.reduce((sum, d) => sum + Number(d.total_sales || 0), 0),
-    [dealers],
-  );
+        if (!alive) return;
 
-  const totalInventory = useMemo(
-    () => dealers.reduce((sum, d) => sum + Number(d.active_inventory || 0), 0),
-    [dealers],
-  );
+        const t = resTerritories?.data;
+        const k = resKpis?.data;
+        const h = resHealth?.data;
+        const trend = resTrend?.data;
+        const makeMix = resMakeMix?.data;
+        const modelMix = resModelMix?.data;
+        const byState = resByState?.data;
+        const topInv = resTopInv?.data;
+        const over = resOver?.data;
+        const under = resUnder?.data;
+        const eff = resEff?.data;
+        const opp = resOpp?.data;
 
-  const avgSalesPerDealer = totalDealers ? (totalSales / totalDealers) : 0;
-  const invSalesRatio = totalSales ? (totalInventory / totalSales) : 0;
+        if (!t?.success || !k?.success || !h?.success || !trend?.success || !makeMix?.success || !modelMix?.success || !byState?.success || !topInv?.success || !over?.success || !under?.success || !eff?.success || !opp?.success) {
+          throw new Error('API returned unexpected payload');
+        }
 
-  // % of sales from top 10% dealers
-  const marketConcentration = useMemo(() => {
-    if (!dealers.length || !totalSales) return null;
-    const sorted = [...dealers].sort((a, b) => Number(b.total_sales) - Number(a.total_sales));
-    const top10 = sorted.slice(0, Math.ceil(sorted.length * 0.1));
-    const topSales = top10.reduce((sum, d) => sum + Number(d.total_sales || 0), 0);
-    return (topSales / totalSales) * 100;
-  }, [dealers, totalSales]);
+        const statesList = Array.isArray(t?.states) ? t.states : [];
+        setSummary({
+          ...k,
+          ...h,
+          states: statesList,
+        });
+        setStructure({
+          ...(trend || {}),
+          ...(makeMix || {}),
+          ...(modelMix || {}),
+          ...(byState || {}),
+        });
+        setLeaders({
+          topInventoryHolders: Array.isArray(topInv?.rows) ? topInv.rows : [],
+          overstockedDealers: Array.isArray(over?.rows) ? over.rows : [],
+          understockedDealers: Array.isArray(under?.rows) ? under.rows : [],
+          efficientManagers: Array.isArray(eff?.rows) ? eff.rows : [],
+          opportunityStates: Array.isArray(opp?.rows) ? opp.rows : [],
+          maxTopInventory: topInv?.maxTopInventory,
+        });
 
-  // Classify dealers by inventory-to-sales ratio
-  const dealerHealth = useMemo(() => {
-    if (!dealers.length) {
-      return {
-        balanced: 0,
-        overstock: 0,
-        understock: 0,
-        balancedPct: 0,
-        overstockPct: 0,
-        understockPct: 0,
-      };
-    }
-
-    let balanced = 0;
-    let overstock = 0;
-    let understock = 0;
-
-    dealers.forEach(d => {
-      const inventory = Number(d.active_inventory || 0);
-      const sales = Number(d.total_sales || 0);
-
-      if (!inventory && !sales) return;
-
-      const ratio = sales ? inventory / sales : Infinity;
-
-      if (!Number.isFinite(ratio)) return;
-
-      if (ratio < 0.9) {
-        understock += 1;
-      } else if (ratio > 1.1) {
-        overstock += 1;
-      } else {
-        balanced += 1;
+        // If no state is selected yet, default to first returned state so filters work.
+        if (String(scope || '').toLowerCase() === 'state') {
+          if (!territoryState && statesList.length) setTerritoryState(statesList[0]);
+        }
+      } catch (e) {
+        if (!alive) return;
+        setError('Failed to load inventory analysis from API');
+        setSummary(null);
+        setStructure(null);
+        setLeaders(null);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
       }
-    });
-
-    const total = balanced + overstock + understock || 1;
-
-    return {
-      balanced,
-      overstock,
-      understock,
-      balancedPct: (balanced / total) * 100,
-      overstockPct: (overstock / total) * 100,
-      understockPct: (understock / total) * 100,
     };
-  }, [dealers]);
 
-  // Make, Model, Segment distribution for charts
-  const makeInventory = useMemo(() => {
-    const map = {};
-    dealers.forEach(d => {
-      const makes = (d.top_5_makes || '').split('|').map(m => m.trim());
-      const invs = (d.top_5_make_inventory || '').split('|').map(i => Number(i.trim() || 0));
-      makes.forEach((make, idx) => {
-        if (!map[make]) map[make] = 0;
-        map[make] += invs[idx] || 0;
+    load();
+    return () => { alive = false; };
+  }, [scope, territoryState, timeRange]);
+
+  const states = useMemo(() => {
+    const list = summary?.states;
+    return Array.isArray(list) ? list : [];
+  }, [summary]);
+
+  const totalDealers = toNumber(summary?.totalDealers);
+  const totalSales = toNumber(summary?.totalSales);
+  const totalInventory = toNumber(summary?.totalInventory);
+  const avgInventoryPerDealer = toNumber(summary?.avgInventoryPerDealer);
+  const invSalesRatio = toNumber(summary?.invSalesRatio);
+  const avgUniqueModels = toNumber(summary?.avgUniqueModels);
+  const riskDealersPct = toNumber(summary?.riskDealersPct);
+  const topMakeConcentrationPct = toNumber(summary?.topMakeConcentrationPct);
+  const inventoryConcentrationPct = toNumber(summary?.inventoryConcentrationPct);
+  const dealerHealth = summary?.dealerHealth || { understock: 0, balanced: 0, overstock: 0, understockPct: 0, balancedPct: 0, overstockPct: 0 };
+
+  const makeInventory = useMemo(() => (Array.isArray(structure?.makeMix) ? structure.makeMix : []), [structure]);
+  const modelInventory = useMemo(() => (Array.isArray(structure?.modelMix) ? structure.modelMix : []), [structure]);
+  const segmentInventory = useMemo(() => (Array.isArray(structure?.segmentMix) ? structure.segmentMix : []), [structure]);
+  const inventoryVsSalesSeries = useMemo(() => (Array.isArray(structure?.inventoryVsSalesTrend) ? structure.inventoryVsSalesTrend : []), [structure]);
+  const inventoryByStateSeries = useMemo(() => (Array.isArray(structure?.inventoryVsSalesByState) ? structure.inventoryVsSalesByState : []), [structure]);
+
+  const marketSummary = summary?.marketSummary || '';
+  const topInventoryHolders = leaders?.topInventoryHolders || [];
+  const overstockedDealers = leaders?.overstockedDealers || [];
+  const understockedDealers = leaders?.understockedDealers || leaders?.understocked_dealers || leaders?.understocked || [];
+  const efficientManagers = leaders?.efficientManagers || [];
+  const opportunityStates = leaders?.opportunityStates || [];
+  const maxTopInventory = toNumber(leaders?.maxTopInventory);
+
+  const invRatioTone = ratioTone(invSalesRatio);
+
+  const daysInRange = useMemo(() => {
+    if (timeRange === '60d') return 60;
+    if (timeRange === '3m') return 90;
+    return 30;
+  }, [timeRange]);
+
+  const daysOfSupply = (inventory, sales) => {
+    const inv = toNumber(inventory);
+    const s = toNumber(sales);
+    if (inv <= 0 || s <= 0) return null;
+    return (inv / s) * daysInRange;
+  };
+
+  const getInv = (r) => toNumber(r?.inv ?? r?.inventory ?? r?.total_inventory ?? r?.totalInventory);
+  const getSales = (r) => toNumber(r?.sales ?? r?.total_sales ?? r?.totalSales);
+  const getRatio = (r) => toNumber(r?.ratio ?? r?.invSales ?? r?.inv_sales ?? r?.inv_sales_ratio ?? r?.invSalesRatio);
+
+  const derivedUnderstockedDealers = useMemo(() => {
+    if (Array.isArray(understockedDealers) && understockedDealers.length) return understockedDealers;
+    const pool = [];
+    const add = (rows) => {
+      if (!Array.isArray(rows)) return;
+      rows.forEach((r) => {
+        const inv = getInv(r);
+        const sales = getSales(r);
+        if (!inv || !sales) return;
+        const ratio = inv / sales;
+        pool.push({ ...r, inv, sales, ratio });
       });
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [dealers]);
+    };
+    add(topInventoryHolders);
+    add(efficientManagers);
+    add(overstockedDealers);
 
-  const modelInventory = useMemo(() => {
-    const map = {};
-    dealers.forEach(d => {
-      const models = (d.top_5_models || '').split('|').map(m => m.trim());
-      const invs = (d.top_5_model_inventory || '').split('|').map(i => Number(i.trim() || 0));
-      models.forEach((model, idx) => {
-        if (!map[model]) map[model] = 0;
-        map[model] += invs[idx] || 0;
-      });
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [dealers]);
-
-  const segmentInventory = useMemo(() => {
-    const map = {};
-    dealers.forEach(d => {
-      const makes = (d.top_5_makes || '').split('|').map(m => m.trim());
-      const models = (d.top_5_models || '').split('|').map(m => m.trim());
-      const invs = (d.top_5_model_inventory || '').split('|').map(i => Number(i.trim() || 0));
-      models.forEach((model, idx) => {
-        const make = makes[idx] || '';
-        const body = bodyStyles.find(b => b.make === make && b.model === model);
-        // bodyStyle column is normalized to "bodystyle" by parseCsv
-        const rawSeg = body ? (body.bodystyle || body.bodyStyle || 'Other') : 'Other';
-        const seg = (rawSeg || 'Other').toString();
-        if (!map[seg]) map[seg] = 0;
-        map[seg] += invs[idx] || 0;
-      });
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [dealers, bodyStyles]);
-
-  // Narrative summary for LLM / executives
-  const marketSummary = useMemo(() => {
-    if (!dealers.length || !totalSales || !totalInventory) {
-      return 'No market data available yet. Check that the CSV files are accessible and loaded correctly.';
+    const seen = new Set();
+    const unique = [];
+    for (const r of pool) {
+      const k = String(r?.canonical_dealer_id || r?.dealer || '').toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      unique.push(r);
     }
-    const pressureText = (() => {
-      if (invSalesRatio > 1.1) {
-        return 'inventory levels are high relative to sales, creating pricing pressure.';
-      }
-      if (invSalesRatio < 0.9) {
-        return 'inventory is tight relative to sales, supporting stronger pricing power.';
-      }
-      return 'inventory is broadly in balance with sales, keeping pricing stable.';
-    })();
 
-    const concentrationText = typeof marketConcentration === 'number'
-      ? `A small group of top dealers accounts for ${marketConcentration.toFixed(1)}% of total sales, indicating ${marketConcentration > 50 ? 'a winner-take-all dynamic' : 'a relatively distributed competitive landscape'}.`
-      : '';
-
-    const leadingSegment = segmentInventory[0]?.name;
-    const segmentText = leadingSegment
-      ? `${leadingSegment}s currently lead inventory share, `
-      : '';
-
-    return [
-      `The market consists of ${totalDealers.toLocaleString()} active dealers with ${totalSales.toLocaleString()} vehicles sold and ${totalInventory.toLocaleString()} units in stock.`,
-      segmentText,
-      `and overall ${pressureText}`,
-      concentrationText,
-    ].join(' ').replace(/\s+/g, ' ').trim();
-  }, [dealers, totalDealers, totalSales, totalInventory, invSalesRatio, marketConcentration, segmentInventory]);
-
-  // Table: Top dealers by sales with velocity
-  const topDealers = useMemo(() => {
-    return [...dealers]
-      .map(d => {
-        const sales = Number(d.total_sales || 0);
-        const inventory = Number(d.active_inventory || 0);
-        const velocity = inventory ? sales / inventory : 0;
-        return { ...d, sales, inventory, velocity };
-      })
-      .sort((a, b) => b.sales - a.sales)
+    return unique
+      .filter((r) => Number.isFinite(r.ratio) && r.ratio > 0 && r.ratio < 0.7)
+      .sort((a, b) => a.ratio - b.ratio)
       .slice(0, 10);
-  }, [dealers]);
-
-  const maxTopSales = useMemo(
-    () => topDealers.reduce((max, d) => Math.max(max, d.sales || 0), 0),
-    [topDealers],
-  );
-
-  const maxTopInventory = useMemo(
-    () => topDealers.reduce((max, d) => Math.max(max, d.inventory || 0), 0),
-    [topDealers],
-  );
+  }, [understockedDealers, topInventoryHolders, efficientManagers, overstockedDealers]);
 
   if (loading) return <div className="p-8 text-slate-500">Loading inventory data…</div>;
   if (error) return <div className="p-8 text-rose-600">{error}</div>;
 
   return (
-    <div className="flex flex-col gap-4 p-4 min-h-0">
-      <div>
-        <h1 className="text-2xl font-bold mb-1">Inventory Analysis</h1>
-        <p className="text-slate-500 text-sm">Supply depth and stock pressure</p>
-      </div>
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-2">
-        <button className={`px-3 py-1 rounded-lg text-[11px] font-semibold border ${tab === 'overview' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-900 border-slate-200'}`} onClick={() => setTab('overview')}>Overview</button>
-        <button className={`px-3 py-1 rounded-lg text-[11px] font-semibold border ${tab === 'details' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-900 border-slate-200'}`} onClick={() => setTab('details')}>Details</button>
-      </div>
-      {tab === 'overview' && (
-        <>
-          {/* KPI Summary Strip – compact */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full">
-            <MetricCard title="Total Sales" value={totalSales.toLocaleString()} size="compact" />
-            <MetricCard title="Active Inventory" value={totalInventory.toLocaleString()} size="compact" />
-            <MetricCard title="Inv/Sales Ratio" value={invSalesRatio.toFixed(2)} size="compact" />
-            <MetricCard title="Total Dealers" value={totalDealers.toLocaleString()} size="compact" />
-            <MetricCard title="Avg Sales/Dealer" value={avgSalesPerDealer.toFixed(1)} size="compact" />
-          </div>
-          {/* Inventory Overview: Composition and Insights */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.6fr] gap-3 min-h-0">
-            {/* Left: Composition Charts + State */}
-            <div className="flex flex-col gap-3 min-h-0">
-              {/* All charts in one block, 2x2 grid */}
-                <Card className="p-2 w-full" style={{ height: 'auto', minHeight: 'unset', maxHeight: 'unset', overflow: 'visible' }}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-6">
-                    <div className="h-[320px] w-full">
-                      <SegmentBarChart
-                        data={makeInventory.slice(0, 10)}
-                        title="By Make"
-                        compact
-                        style={{ height: 300, width: '100%' }}
-                      />
-                    </div>
-                    <div className="h-[320px] w-full">
-                      <SegmentBarChart
-                        data={modelInventory.slice(0, 10)}
-                        title="By Model"
-                        compact
-                        style={{ height: 300, width: '100%' }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-6">
-                    <div className="h-[320px] w-full">
-                      <SegmentBarChart
-                        data={segmentInventory.slice(0, 10)}
-                        title="By Segment"
-                        compact
-                        style={{ height: 300, width: '100%' }}
-                      />
-                    </div>
-                    <div className="h-[320px] w-full">
-                      <SegmentBarChart
-                        data={(() => {
-                          const map = {};
-                          dealers.forEach(d => {
-                            const state = d.state || 'Unknown';
-                            const inv = Number(d.active_inventory || 0);
-                            if (!map[state]) map[state] = 0;
-                            map[state] += inv;
-                          });
-                          return Object
-                            .entries(map)
-                            .map(([name, value]) => ({ name, value }))
-                            .sort((a, b) => b.value - a.value)
-                            .slice(0, 10);
-                        })()}
-                        title="Inventory by State"
-                        compact
-                        style={{ height: 300, width: '100%' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Card>
+    <div className="flex flex-col gap-3 p-3 min-h-0">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-100 bg-indigo-50 text-indigo-700 text-[11px] font-semibold">
+              <Sparkles className="w-4 h-4" />
+              Inventory Dashboard
+              <ChevronRight className="w-4 h-4" />
+              Supply Health & Risk
             </div>
-            {/* Right: Insights Panels */}
-            <div className="flex flex-col gap-4 min-h-0">
-              {/* Inventory Health Summary */}
-              <Card className="p-4">
-                <h2 className="font-semibold mb-2">Inventory Health Summary</h2>
-                <div className="text-xs text-slate-700">Dealer balance snapshot</div>
-                <div className="flex gap-2 mt-2">
-                  <div className="flex-1 text-center">
-                    <div className="text-lg font-bold text-green-700">Balanced</div>
-                    <div className="text-2xl font-bold">
-                      {dealerHealth.balanced.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {dealerHealth.balancedPct.toFixed(0)}% of dealers
-                    </div>
-                  </div>
-                  <div className="flex-1 text-center">
-                    <div className="text-lg font-bold text-rose-700">Overstock</div>
-                    <div className="text-2xl font-bold">
-                      {dealerHealth.overstock.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {dealerHealth.overstockPct.toFixed(0)}% of dealers
-                    </div>
-                  </div>
-                  <div className="flex-1 text-center">
-                    <div className="text-lg font-bold text-yellow-600">Understock</div>
-                    <div className="text-2xl font-bold">
-                      {dealerHealth.understock.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {dealerHealth.understockPct.toFixed(0)}% of dealers
-                    </div>
-                  </div>
+            <h1 className="text-2xl font-bold mt-2 text-slate-900">Inventory Analysis</h1>
+            <p className="text-slate-500 text-sm max-w-2xl">
+              State of inventory, who is stocked/understocked, and where opportunity & risk exist across dealers and regions.
+            </p>
+          </div>
+          <div className="hidden lg:flex items-center gap-2">
+            <div className={`px-3 py-2 rounded-xl border text-xs font-semibold ${invRatioTone.cls}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4" />
+                  Inventory Pressure
                 </div>
-                <div className="text-[10px] text-slate-400 mt-1">
-                  Based on inventory-to-sales ratio thresholds: &lt;0.9 understock, 0.9–1.1 balanced, &gt;1.1 overstock.
-                </div>
-              </Card>
-              {/* Market Concentration */}
-              <Card className="p-4">
-                <h2 className="font-semibold mb-2">Market Concentration</h2>
-                <div className="text-xs text-slate-700">Share of sales from top 10% dealers</div>
-                <div className="text-3xl font-bold text-blue-700 mt-2">
-                  {typeof marketConcentration === 'number'
-                    ? `${marketConcentration.toFixed(1)}%`
-                    : '—'}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-1">Higher values indicate winner-take-all pressure.</div>
-              </Card>
-              {/* Inventory Highlights */}
-              <Card className="p-4">
-                <h2 className="font-semibold mb-2">Inventory Highlights</h2>
-                <div className="text-xs text-slate-700">
-                  Top make: <span className="font-bold">{makeInventory[0]?.name || '—'}</span>
-                </div>
-                <div className="text-xs text-slate-700">
-                  Top segment: <span className="font-bold">{segmentInventory[0]?.name || '—'}</span>
-                </div>
-                <div className="text-xs text-slate-700">
-                  Top model: <span className="font-bold">{modelInventory[0]?.name || '—'}</span>
-                </div>
-                <div className="text-xs text-slate-700">
-                  Median Inv/Sales:{' '}
-                  <span className="font-bold">
-                    {(() => {
-                      if (!dealers.length) return '—';
-                      const ratios = dealers
-                        .map(d => Number(d.active_inventory || 0) / (Number(d.total_sales || 1)))
-                        .filter(v => isFinite(v))
-                        .sort((a, b) => a - b);
-                      const mid = Math.floor(ratios.length / 2);
-                      return ratios.length % 2
-                        ? ratios[mid].toFixed(2)
-                        : ((ratios[mid - 1] + ratios[mid]) / 2).toFixed(2);
-                    })()}
-                  </span>
-                </div>
-              </Card>
-              {/* Market Summary – directly under Inventory Highlights */}
-              <Card className="p-4">
-                <h2 className="font-semibold mb-1">Market Summary</h2>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {marketSummary}
-                </p>
-              </Card>
+                <div className="tabular-nums">{invSalesRatio.toFixed(2)}</div>
+              </div>
+              <div className="mt-1 text-[11px] opacity-80">{invRatioTone.label}</div>
             </div>
           </div>
-        </>
-      )}
-      {tab === 'details' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {/* Top Market Leaders (dashboard table) */}
-          <DashboardTable
-            title="Top Market Leaders"
-            topRight="Sales velocity = total sales ÷ active inventory"
-            wrap
-            columns={[
-              { key: 'rank', title: 'Rank', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
-              { key: 'dealer', title: 'Dealer', render: (r) => <div className="min-w-0 break-words"><div className="font-semibold text-slate-900">{(r.seller_name || '').split('|')[0]}</div><div className="text-[10px] text-slate-400">ID: {r.canonical_dealer_id || r.mc_dealer_id || '—'}</div></div>, className: 'w-36', cellClass: 'max-w-[12rem]' },
-              { key: 'city', title: 'City / State', render: (r) => <div className="text-slate-700 break-words">{r.city || '—'}<div className="text-[10px] text-slate-400">{r.state || ''}</div></div>, className: 'w-28', cellClass: 'max-w-[9rem]' },
-              { key: 'sales', title: 'Total Sales', render: (r) => (
-                <div className="text-right">
-                  <div className="font-semibold text-slate-900">{Number(r.sales).toLocaleString()}</div>
-                  <div className="mt-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${maxTopSales ? (r.sales / maxTopSales) * 100 : 0}%` }} />
-                  </div>
-                </div>
-              ), className: 'text-right w-28' },
-              { key: 'inventory', title: 'Active Inventory', render: (r) => (
-                <div className="text-right">
-                  <div className="font-semibold text-slate-900">{Number(r.inventory).toLocaleString()}</div>
-                  <div className="mt-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${maxTopInventory ? (r.inventory / maxTopInventory) * 100 : 0}%` }} />
-                  </div>
-                </div>
-              ), className: 'text-right w-28' },
-              { key: 'unique_models_count', title: 'Unique Models', render: (r) => Number(r.unique_models_count || 0).toLocaleString(), className: 'text-right w-16' },
-              { key: 'velocity', title: 'Sales Velocity', render: (r) => {
-                const velocity = Number(r.velocity || 0);
-                let cls = 'text-amber-700';
-                let label = 'Balanced';
-                if (velocity > 1.2) { cls = 'text-emerald-700'; label = 'High'; }
-                else if (velocity < 0.8) { cls = 'text-rose-700'; label = 'Slow'; }
-                return (<div className="text-right"><span className={`font-semibold ${cls}`}>{velocity.toFixed(2)}</span><span className="ml-2 text-[10px] text-slate-400">{label}</span></div>);
-              }, className: 'text-right w-20' },
-            ]}
-            rows={topDealers}
-          />
-          
-
-          {/* Top Inventory Dealers (dashboard table) */}
-          <DashboardTable
-            title="Top Inventory Dealers"
-            maxHeight={200}
-            wrap
-            columns={[
-              { key: 'rank', title: 'Rank', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
-              { key: 'dealer', title: 'Dealer', render: (r) => <div className="min-w-0 break-words"><div className="font-semibold text-slate-900">{(r.seller_name || '').split('|')[0]}</div><div className="text-[10px] text-slate-400">ID: {r.canonical_dealer_id || r.mc_dealer_id || '—'}</div></div>, className: 'w-36', cellClass: 'max-w-[12rem]' },
-              { key: 'city', title: 'City / State', render: (r) => <div className="text-slate-700 break-words">{r.city || '—'}<div className="text-[10px] text-slate-400">{r.state || ''}</div></div>, className: 'w-28', cellClass: 'max-w-[9rem]' },
-              { key: 'inventory', title: 'Active Inventory', render: (r) => <div className="text-right font-semibold">{Number(r.inventory).toLocaleString()}</div>, className: 'text-right w-24' },
-              { key: 'sales', title: 'Total Sales', render: (r) => <div className="text-right">{Number(r.sales).toLocaleString()}</div>, className: 'text-right w-24' },
-              { key: 'unique_models_count', title: 'Unique Models', render: (r) => Number(r.unique_models_count || 0).toLocaleString(), className: 'text-right w-16' },
-            ]}
-            rows={[...dealers].map(d => ({ ...d, sales: Number(d.total_sales || 0), inventory: Number(d.active_inventory || 0) })).sort((a, b) => b.inventory - a.inventory).slice(0, 10)}
-          />
-
-
-          {/* Supply vs Demand Alignment (dashboard table) */}
-            <DashboardTable
-              title="Supply vs Demand Alignment"
-              maxHeight={200}
-              columns={[
-                { key: 'state', title: 'State' },
-                { key: 'dealers', title: 'Dealers', className: 'text-right w-24' },
-                { key: 'inv', title: 'Inv', className: 'text-right w-28' },
-                { key: 'invSales', title: 'Inv/Sales', className: 'text-right w-24', render: r => Number(r.invSales).toFixed(2) },
-              ]}
-              rows={(() => {
-                const stateMap = {};
-                dealers.forEach(d => {
-                  const state = d.state || 'Unknown';
-                  if (!stateMap[state]) stateMap[state] = { dealers: 0, sales: 0, inv: 0 };
-                  stateMap[state].dealers += 1;
-                  stateMap[state].sales += Number(d.total_sales || 0);
-                  stateMap[state].inv += Number(d.active_inventory || 0);
-                });
-                return Object.entries(stateMap).map(([state, v]) => {
-                  const invSales = v.sales ? v.inv / v.sales : 0;
-                  return { state, dealers: v.dealers, inv: v.inv, invSales };
-                }).sort((a, b) => b.invSales - a.invSales).slice(0, 8);
-              })()}
-            />
-
-          {/* Slow-Moving Inventory Signals */}
-          <DashboardTable
-            title="Slow-Moving Inventory Signals"
-            maxHeight={180}
-            columns={[
-              { key: 'dealer', title: 'Dealer' },
-              { key: 'state', title: 'State', className: 'w-20' },
-              { key: 'invSales', title: 'Inv/Sales', className: 'text-right w-24', render: r => Number(r.invSales).toFixed(2) },
-              { key: 'inv', title: 'Inv', className: 'text-right w-24', render: r => Number(r.inv).toLocaleString() },
-            ]}
-            rows={[...dealers].map(d => ({ ...d, inv: Number(d.active_inventory || 0), sales: Number(d.total_sales || 0), invSales: Number(d.active_inventory || 0) / (Number(d.total_sales || 1)), dealer: (d.seller_name || '').split('|')[0], state: d.state || '' })).filter(d => d.sales > 0).sort((a, b) => b.invSales - a.invSales).slice(0, 8)}
-          />
-
-          {/* Fast-Moving Inventory Signals */}
-          <DashboardTable
-            title="Fast-Moving Inventory Signals"
-            maxHeight={180}
-            columns={[
-              { key: 'dealer', title: 'Dealer' },
-              { key: 'state', title: 'State', className: 'w-20' },
-              { key: 'salesInv', title: 'Sales/Inv', className: 'text-right w-24', render: r => Number(r.salesInv).toFixed(2) },
-              { key: 'sales', title: 'Sales', className: 'text-right w-28', render: r => Number(r.sales).toLocaleString() },
-            ]}
-            rows={[...dealers].map(d => ({ ...d, inv: Number(d.active_inventory || 0), sales: Number(d.total_sales || 0), salesInv: Number(d.total_sales || 0) / (Number(d.active_inventory || 1)), dealer: (d.seller_name || '').split('|')[0], state: d.state || '' })).filter(d => d.inv > 0).sort((a, b) => b.salesInv - a.salesInv).slice(0, 8)}
-          />
-
-          {/* Top Models (Inventory) */}
-          <DashboardTable
-            title="Top Models (Inventory)"
-            maxHeight={160}
-            columns={[
-              { key: 'model', title: 'Model' },
-              { key: 'seg', title: 'Seg' },
-              { key: 'inv', title: 'Inv', className: 'text-right w-28', render: r => Number(r.inv).toLocaleString() },
-            ]}
-            rows={modelInventory.slice(0,5).map(row => {
-              let foundMake = '';
-              for (const d of dealers) {
-                const models = (d.top_5_models || '').split('|').map(m => m.trim());
-                const makes = (d.top_5_makes || '').split('|').map(m => m.trim());
-                const idxModel = models.findIndex(m => m === row.name);
-                if (idxModel !== -1 && makes[idxModel]) { foundMake = makes[idxModel]; break; }
-              }
-              const body = bodyStyles.find(b => (b.model === row.name) && (foundMake ? b.make === foundMake : true));
-              const seg = body ? (body.bodystyle || body.bodyStyle || 'Other') : 'Other';
-              return { model: row.name, seg, inv: row.value };
-            })}
-          />
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)_340px] gap-2 min-h-0 items-start">
+        <div className="flex flex-col gap-2 min-h-0">
+          <div className="rounded-2xl border border-gray-100 bg-white p-2">
+            <TerritoryFilters
+              scope={scope}
+              state={territoryState}
+              dateRange={timeRange}
+              states={states}
+              onChange={({ scope: s, state, dateRange }) => {
+                if (s) setScope(s);
+                if (state !== undefined) setTerritoryState(state);
+                if (dateRange) setTimeRange(dateRange);
+              }}
+            />
+          </div>
+
+          <Card className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-indigo-700" />
+                <div>
+                  <div className="text-sm font-bold text-slate-900">Inventory Performance Overview</div>
+                  <div className="text-[11px] text-slate-500 leading-snug">Core question: Is the supply side healthy, efficient, and balanced?</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-500">time range: <span className="font-semibold text-slate-700">{timeRange}</span></div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <MetricCard
+                title="Total Active Inventory"
+                value={fmtInt(totalInventory)}
+                icon={Boxes}
+                iconColor="text-indigo-700"
+                iconBg="bg-indigo-50"
+                gradient
+                size="compact"
+              />
+              <MetricCard
+                title="Avg Inventory / Dealer"
+                value={fmtInt(avgInventoryPerDealer)}
+                icon={Building2}
+                iconColor="text-sky-700"
+                iconBg="bg-sky-50"
+                gradient
+                size="compact"
+              />
+              <MetricCard
+                title="Inventory-to-Sales Ratio"
+                value={invSalesRatio.toFixed(2)}
+                icon={Scale}
+                iconColor={invRatioTone.label === 'Oversupply' ? 'text-rose-700' : invRatioTone.label === 'Tight' ? 'text-emerald-700' : 'text-amber-700'}
+                iconBg={invRatioTone.label === 'Oversupply' ? 'bg-rose-50' : invRatioTone.label === 'Tight' ? 'bg-emerald-50' : 'bg-amber-50'}
+                gradient
+                size="compact"
+              />
+              <MetricCard
+                title="Inventory Diversity Index"
+                value={fmtInt(avgUniqueModels)}
+                icon={Layers}
+                iconColor="text-emerald-700"
+                iconBg="bg-emerald-50"
+                gradient
+                size="compact"
+              />
+              <MetricCard
+                title="% Dealers at Inventory Risk"
+                value={fmtPct(riskDealersPct, 0)}
+                icon={ShieldAlert}
+                iconColor={riskDealersPct > 20 ? 'text-rose-700' : 'text-amber-700'}
+                iconBg={riskDealersPct > 20 ? 'bg-rose-50' : 'bg-amber-50'}
+                gradient
+                size="compact"
+              />
+              <MetricCard
+                title="Top Make Concentration"
+                value={fmtPct(topMakeConcentrationPct, 0)}
+                icon={Package}
+                iconColor="text-violet-700"
+                iconBg="bg-violet-50"
+                gradient
+                size="compact"
+              />
+            </div>
+          </Card>
+
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-700" />
+                <div className="text-sm font-bold text-slate-900">Inventory Health</div>
+              </div>
+              <div className="text-[11px] text-slate-500">Top 10% dealers</div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2">
+                <div className="text-[10px] text-emerald-700 font-semibold">Understock</div>
+                <div className="text-base font-bold text-emerald-900 tabular-nums leading-tight">{fmtInt(dealerHealth.understock)}</div>
+                <div className="text-[10px] text-emerald-700/70">{Number(dealerHealth.understockPct || 0).toFixed(0)}%</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-2">
+                <div className="text-[10px] text-amber-700 font-semibold">Balanced</div>
+                <div className="text-base font-bold text-amber-900 tabular-nums leading-tight">{fmtInt(dealerHealth.balanced)}</div>
+                <div className="text-[10px] text-amber-700/70">{Number(dealerHealth.balancedPct || 0).toFixed(0)}%</div>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-2">
+                <div className="text-[10px] text-rose-700 font-semibold">Overstock</div>
+                <div className="text-base font-bold text-rose-900 tabular-nums leading-tight">{fmtInt(dealerHealth.overstock)}</div>
+                <div className="text-[10px] text-rose-700/70">{Number(dealerHealth.overstockPct || 0).toFixed(0)}%</div>
+              </div>
+            </div>
+
+            <div className="mt-2 text-[11px] text-slate-500">
+              Thresholds:
+              <span className="font-semibold text-slate-700"> &lt;0.9</span> tight,
+              <span className="font-semibold text-slate-700"> 0.9–1.1</span> balanced,
+              <span className="font-semibold text-slate-700"> &gt;1.1</span> oversupply.
+            </div>
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-3 min-h-0">
+          <Card className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-700" />
+                <div>
+                  <div className="text-sm font-bold text-slate-900">Leaders & Opportunities</div>
+                  <div className="text-[11px] text-slate-500">Top holders, overstock risk, and efficiency benchmarks</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-500">Top 10% dealers</div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
+                <DashboardTable
+                  title="Top Inventory Holders"
+                  topRight="Highest active inventory"
+                  wrap
+                  maxHeight={180}
+                  columns={[
+                    { key: 'rank', title: '#', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
+                    {
+                      key: 'dealer', title: 'Dealer', render: (r) => (
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 break-words">{r.dealer}</div>
+                        </div>
+                      ), className: 'w-44', cellClass: 'max-w-[18rem]'
+                    },
+                    { key: 'cityState', title: 'City / State', render: (r) => <div className="text-slate-700 break-words">{r.cityState}</div>, className: 'w-28' },
+                    {
+                      key: 'inventory', title: 'Inv', render: (r) => <div className="text-right font-semibold text-slate-900">{fmtInt(r.inventory)}</div>, className: 'text-right w-20'
+                    },
+                    { key: 'daysSupply', title: 'Days', render: (r) => <div className="text-right tabular-nums">{daysOfSupply(r.inventory, r.sales) ? daysOfSupply(r.inventory, r.sales).toFixed(0) : '—'}</div>, className: 'text-right w-16' },
+                  ]}
+                  rows={topInventoryHolders}
+                />
+
+                <DashboardTable
+                  title="Efficient Inventory Managers"
+                  topRight="Sales ÷ Inventory"
+                  wrap
+                  maxHeight={180}
+                  columns={[
+                    { key: 'rank', title: '#', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
+                    { key: 'dealer', title: 'Dealer', render: (r) => <div className="font-semibold text-slate-900 break-words">{r.dealer}</div>, className: 'w-44', cellClass: 'max-w-[18rem]' },
+                    { key: 'cityState', title: 'City', render: (r) => <div className="text-slate-700 break-words">{r.cityState}</div>, className: 'w-28' },
+                    {
+                      key: 'velocity', title: 'Velocity', render: (r) => <div className="text-right tabular-nums">{Number(r.velocity || 0).toFixed(2)}</div>, className: 'text-right w-20'
+                    },
+                    { key: 'daysSupply', title: 'Days', render: (r) => <div className="text-right tabular-nums">{daysOfSupply(r.inv, r.sales) ? daysOfSupply(r.inv, r.sales).toFixed(0) : '—'}</div>, className: 'text-right w-16' },
+                  ]}
+                  rows={efficientManagers}
+                />
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <DashboardTable
+                  title="Overstocked Dealers"
+                  topRight="Inv/Sales > 1.3"
+                  wrap
+                  maxHeight={180}
+                  columns={[
+                    { key: 'rank', title: '#', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
+                    { key: 'dealer', title: 'Dealer', render: (r) => <div className="font-semibold text-slate-900 break-words">{r.dealer}</div>, className: 'w-44', cellClass: 'max-w-[18rem]' },
+                    { key: 'cityState', title: 'City', render: (r) => <div className="text-slate-700 break-words">{r.cityState}</div>, className: 'w-28' },
+                    {
+                      key: 'ratio', title: 'Inv/Sales', render: (r) => <div className="text-right tabular-nums text-rose-700 font-semibold">{getRatio(r).toFixed(2)}</div>, className: 'text-right w-20'
+                    },
+                    { key: 'daysSupply', title: 'Days', render: (r) => <div className="text-right tabular-nums">{daysOfSupply(getInv(r), getSales(r)) ? daysOfSupply(getInv(r), getSales(r)).toFixed(0) : '—'}</div>, className: 'text-right w-16' },
+                  ]}
+                  rows={overstockedDealers}
+                />
+
+                <DashboardTable
+                  title="Understocked Dealers"
+                  topRight="Inv/Sales < 0.7"
+                  wrap
+                  maxHeight={180}
+                  columns={[
+                    { key: 'rank', title: '#', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
+                    { key: 'dealer', title: 'Dealer', render: (r) => <div className="font-semibold text-slate-900 break-words">{r.dealer}</div>, className: 'w-44', cellClass: 'max-w-[18rem]' },
+                    { key: 'cityState', title: 'City', render: (r) => <div className="text-slate-700 break-words">{r.cityState}</div>, className: 'w-28' },
+                    {
+                      key: 'ratio', title: 'Inv/Sales', render: (r) => <div className="text-right tabular-nums text-emerald-700 font-semibold">{getRatio(r).toFixed(2)}</div>, className: 'text-right w-20'
+                    },
+                    { key: 'daysSupply', title: 'Days', render: (r) => <div className="text-right tabular-nums">{daysOfSupply(getInv(r), getSales(r)) ? daysOfSupply(getInv(r), getSales(r)).toFixed(0) : '—'}</div>, className: 'text-right w-16' },
+                  ]}
+                  rows={derivedUnderstockedDealers}
+                />
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <aside className="flex flex-col gap-3 min-h-0">
+          <Card className="p-4 max-h-[560px] overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-700" />
+                <div className="text-sm font-bold text-slate-900">Key Insights</div>
+              </div>
+              <div className="text-[11px] text-slate-500">LLM insights</div>
+            </div>
+
+            <div className="mt-3 flex flex-col gap-3 overflow-auto max-h-[500px] pr-1">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-[11px] text-slate-600 leading-relaxed">{marketSummary}</div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-[11px] font-semibold text-slate-700">Specs</div>
+                <div className="mt-2 grid grid-cols-1 gap-2">
+                  <div className="text-[11px] text-slate-600"><span className="font-semibold text-slate-700">Scope:</span> {safeText(scope) === 'State' ? (safeText(territoryState) || 'State') : 'National'}</div>
+                  <div className="text-[11px] text-slate-600"><span className="font-semibold text-slate-700">Top Make:</span> {safeText(summary?.topMake) || makeInventory[0]?.name || '—'}</div>
+                  <div className="text-[11px] text-slate-600"><span className="font-semibold text-slate-700">Top Segment:</span> {safeText(summary?.topSegment) || segmentInventory[0]?.name || '—'}</div>
+                  <div className="text-[11px] text-slate-600"><span className="font-semibold text-slate-700">Risk threshold:</span> Inv/Sales &gt; 1.3</div>
+                </div>
+              </div>
+
+              <div>
+                <DashboardTable
+                  title="Top States by Inventory Opportunity"
+                  topRight="Opportunity Index"
+                  wrap
+                  maxHeight={180}
+                  columns={[
+                    { key: 'rank', title: '#', render: (_, i) => i + 1, className: 'w-10 whitespace-nowrap' },
+                    {
+                      key: 'state', title: 'State', render: (r) => (
+                        <div className="inline-flex items-center gap-2">
+                          <Globe2 className="w-4 h-4 text-indigo-700" />
+                          <span className="font-semibold text-slate-900">{r.state}</span>
+                        </div>
+                      ), className: 'w-20'
+                    },
+                    { key: 'score', title: 'Score', render: (r) => <div className="text-right tabular-nums font-semibold text-indigo-700">{Number(r.score || 0).toFixed(0)}</div>, className: 'text-right w-20' },
+                    { key: 'invSales', title: 'Inv/Sales', render: (r) => <div className="text-right tabular-nums">{Number(r.invSales || 0).toFixed(2)}</div>, className: 'text-right w-20' },
+                    { key: 'dealers', title: 'Dealers', render: (r) => <div className="text-right">{fmtInt(r.dealers)}</div>, className: 'text-right w-20' },
+                  ]}
+                  rows={opportunityStates}
+                />
+              </div>
+
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-700 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-rose-800">Risk signal</div>
+                    <div className="text-[11px] text-rose-700/90 leading-relaxed">
+                      {riskDealersPct > 20
+                        ? 'A high share of dealers are at inventory risk (Inv/Sales > 1.3). Prioritize turn strategies and targeted de-stocking.'
+                        : 'Inventory risk is contained, but monitor states with high Inv/Sales and dealer-level outliers.'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </aside>
+
+        <Card className="p-4 lg:col-span-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <LineChart className="w-4 h-4 text-indigo-700" />
+              <div>
+                <div className="text-sm font-bold text-slate-900">Inventory Structure &amp; Trends</div>
+                <div className="text-[11px] text-slate-500">Supply balance, mix, concentration, and regional imbalance</div>
+              </div>
+            </div>
+            <div className={`px-2 py-1 rounded-lg border text-[11px] font-semibold ${invRatioTone.cls}`}>{invRatioTone.label}</div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-900">Inventory vs Sales Trend</div>
+                <div className="text-[11px] text-slate-500">(aggregate)</div>
+              </div>
+              <div className="h-48 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={inventoryVsSalesSeries} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="inventory" name="Inventory" fill="#4f46e5" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="sales" name="Sales" fill="#10b981" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <SegmentBarChart data={makeInventory.slice(0, 10)} title="Inventory Mix by Make (Top 10)" compact />
+              <SegmentBarChart data={modelInventory.slice(0, 10)} title="Inventory Mix by Model (Top 10)" compact />
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-900">Inventory Distribution Analysis</div>
+                <div className="text-[11px] text-slate-500">Top 10% dealers</div>
+              </div>
+              <div className="mt-2 grid grid-cols-1 gap-3 items-center">
+                <div className="h-36">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                      <Pie
+                        data={[
+                          { name: 'Top 10% dealers', value: inventoryConcentrationPct },
+                          { name: 'Others', value: Math.max(0, 100 - inventoryConcentrationPct) },
+                        ]}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={42}
+                        outerRadius={58}
+                        paddingAngle={2}
+                      >
+                        <Cell fill="#4f46e5" />
+                        <Cell fill="#cbd5e1" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">{inventoryConcentrationPct.toFixed(1)}%</div>
+                  <div className="text-[11px] text-slate-500 mt-1">% of inventory held by top 10% dealers.</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
+                      <div className="text-[10px] text-slate-500">Total Dealers</div>
+                      <div className="text-sm font-bold text-slate-900">{fmtInt(totalDealers)}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
+                      <div className="text-[10px] text-slate-500">Total Inventory</div>
+                      <div className="text-sm font-bold text-slate-900">{fmtInt(totalInventory)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 lg:col-span-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-900">Inventory vs Sales by State</div>
+                <div className="text-[11px] text-slate-500">Top states by inventory</div>
+              </div>
+              <div className="h-60 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={inventoryByStateSeries} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval={0} angle={-20} textAnchor="end" height={40} />
+                    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="inventory" name="Inventory" fill="#0284c7" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="sales" name="Sales" fill="#10b981" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };

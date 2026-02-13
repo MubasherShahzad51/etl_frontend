@@ -1,0 +1,589 @@
+╔═════════════════════▣◎▣═════════════════════╗
+					     Dashboard
+			   ╚═════════════════════▣◎▣═════════════════════╝
+
+
+🍀 INTRODUCTION
+
+Question It Answer will be : "How is the inventory?"
+Dashboard should have ONLY 3 jobs:
+
+1. State of the inventory
+2. Who is stocked / understocked
+3. Where opportunity & risk exist in inventory
+
+Strategic Purpose: Evaluate the health, efficiency, exposure, and structural risk of vehicle supply across dealers and regions. Focus on supply balance, inventory pressure, dealer exposure risk, regional imbalance, brand concentration, and operational efficiency. Core Question: "Is the supply side healthy, efficient, and balanced?"
+
+This differs from the main Dashboard, which focuses on performance and competition ("Who is winning?").
+
+Analytical Limitations: Not possible with current data - Vehicle age analysis, Days on market, Price elasticity, VIN-level turnover, Margin analysis.
+
+🍀DASHBOARD DESIGN
+
+We will divide Dashboard into 3 Sections : 
+
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+      i) TOP SECTION - HERO KPIs (Executive Snapshot)  
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+Here we will have following KPIs. For Each KPIs We will ask 5 question.
+
+ 
+1. What we can do?        
+2. Why to do?
+3. How to do? (From our data)
+4. How we show it?
+5. How LLM uses it?
+
+╔════════════════════════════════════╗
+      KPI-1. Total Active Inventory
+╚════════════════════════════════════╝
+
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Total Active Inventory
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows overall supply in the market
+► Indicates potential for sales or oversupply
+► Baseline for understanding inventory health and total market supply/exposure size
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: Based on provided columns
+► Logic: SUM(active_inventory) across all canonical_dealer_id
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI number
+► Label: Total Active Inventory
+► Optional subtitle: Vehicles available across all dealers
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► The market holds over 1.4M vehicles in active inventory, suggesting ample supply but potential for stagnation if sales lag.
+
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔════════════════════════════════════╗
+      KPI-2. Average Inventory per Dealer
+╚════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Average Inventory per Dealer
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Normalizes inventory scale across dealers
+► Highlights efficiency or overstocking at dealer level
+► Shows stocking intensity and operational scale
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: Based on provided columns
+► Columns used: active_inventory, canonical_dealer_id
+► AVG(active_inventory) or SUM(active_inventory) / COUNT(DISTINCT canonical_dealer_id)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI
+► Unit: Vehicles per Dealer
+► With trend indicator (e.g., sparkline from last_updated)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dealers maintain an average of 90 vehicles in inventory, indicating moderate stocking levels with room for optimization.
+
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔════════════════════════════════════╗
+      KPI-3. Inventory-to-Sales Ratio (Inventory Pressure)
+╚════════════════════════════════════╝
+
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Inventory-to-Sales Ratio
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Gauges inventory efficiency relative to sales
+► >1 indicates potential oversupply risk
+► Core oversupply risk metric and supply vs demand balance indicator
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Based on provided columns
+► Columns: active_inventory, total_sales, confirmed_sales, potential_sales
+► Inventory-to-Sales Ratio = SUM(active_inventory) / SUM(total_sales) [refine with confirmed_sales + potential_sales]
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI number (e.g. 1.08)
+► Badge: 🟢 <0.9 (Tight), 🟡 0.9–1.1 (Balanced), 🔴 >1.1 (Oversupply)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► An inventory-to-sales ratio of 1.08 signals slight oversupply, urging dealers to accelerate turnover.
+
+                                       🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                        
+                                        
+╔════════════════════════════════════╗
+    KPI-4. Inventory Diversity Index
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: Average Unique Models per Dealer
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Measures variety in inventory
+► Indicates dealer appeal to diverse buyers
+► Measures assortment depth and competitiveness
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dataset: Based on provided columns
+► Columns: unique_models_count
+► AVG(unique_models_count)
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Big KPI
+► Label: Avg Unique Models
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Inventory diversity averages 50 unique models per dealer, enhancing market appeal but risking dilution in focus areas.
+
+					 🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+╔════════════════════════════════════╗
+    KPI-5. % Dealers at Inventory Risk
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: % Dealers at Inventory Risk
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Identifies proportion of dealers with high exposure
+► Early warning system for oversupply risks
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Based on provided columns: active_inventory, total_sales, canonical_dealer_id
+► Calculate per dealer: (active_inventory / total_sales) > 1.3
+► % = (COUNT(risky_dealers) / COUNT(DISTINCT canonical_dealer_id)) * 100
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI percentage
+► Risk color coding (e.g., 🔴 if >20%)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► 25% of dealers are at high inventory risk, indicating widespread oversupply pressure that could impact pricing.
+
+                                       🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                       
+╔════════════════════════════════════╗
+       KPI-6. Top Make Concentration
+╚════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: % Inventory in Top 5 Makes
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Shows reliance on popular makes
+► Highlights diversification needs and brand concentration risk
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Based on provided columns: top_5_makes, top_5_make_inventory, active_inventory
+► AVG(SUM(top_5_make_inventory) / active_inventory) * 100
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► KPI percentage
+► Progress bar optional
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Over 60% of inventory is concentrated in top 5 makes, reducing risk from niche dependencies but limiting variety.
+
+                                      🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+      ii) MIDDLE SECTION - INVENTORY STRUCTURE & TRENDS
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+╔════════════════════════════════════╗
+  Chart-1. Inventory vs Sales Trend
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: Inventory vs Sales (Line Chart)
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Tracks inventory buildup or depletion over time
+► Spots trends in supply relative to demand
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Using last_updated from columns
+► Aggregate by date: SUM(active_inventory), SUM(total_sales) [include confirmed_sales and potential_sales for layered trends]
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dual-line chart
+► X-axis: Date, Y-axis: Units
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Inventory is trending upward faster than sales, signaling potential oversupply risks in the near term.
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+
+╔════════════════════════════════════╗
+  Chart-2. Inventory Mix by Make
+╚════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: Inventory Share by Top Makes/Models
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Reveals dominant inventory types
+► Guides stocking decisions
+► Identifies brand concentration risk
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Columns: top_5_makes, top_5_make_inventory, top_5_models, top_5_model_inventory
+► Aggregate SUM(top_5_make_inventory) by make; group for mix
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Horizontal bar chart (NOT pie)
+► Sorted descending
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Top makes like Ford and Toyota dominate inventory, aligning with high-demand segments but exposing to brand-specific risks.
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔═══════════════════════════════════════════════════════════════╗
+    Chart-3. Inventory Concentration (Dealer Intensity)
+╚═══════════════════════════════════════════════════════════════╝
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Metric: % of Inventory Held by Top 10% Dealers
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Indicates if inventory is concentrated or distributed
+► Highlights supply chain dependencies
+► Detects structural imbalance
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Rank dealers by active_inventory using canonical_dealer_id
+► Concentration % = (SUM(top_10_percent_inventory) / SUM(active_inventory)) × 100 [filter by dealer_type or inventory_type]
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Donut chart
+► Label: Inventory Concentration
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► A concentrated inventory among top dealers could lead to vulnerabilities if key players face disruptions.
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔═══════════════════════════════════════════════════════════════╗
+    Chart-4. Inventory vs Sales by State
+╚═══════════════════════════════════════════════════════════════╝
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: Inventory vs Sales by State
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Detects regional imbalance and supply-demand mismatches
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Group by state: SUM(active_inventory), SUM(total_sales)
+► Use latitude/longitude for optional geo-mapping
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dual bar chart
+► Sorted by state or inventory level
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► States like California show high inventory relative to sales, indicating regional oversupply risks.
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔═══════════════════════════════════════════════════════════════╗
+    Chart-5. Inventory Depth vs Diversity
+╚═══════════════════════════════════════════════════════════════╝
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Chart: Inventory Depth vs Diversity
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Identifies dealer strategy types (e.g., deep vs broad inventory)
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Per dealer: X-axis: active_inventory, Y-axis: unique_models_count
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Scatter plot
+► Optional clustering by dealer_type
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Dealers with high depth but low diversity may face risks in concentrated segments.
+
+                                   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+            
+                                   
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+    iii) BOTTOM SECTION- LEADERS, WINNERS, OPPORTUNITIES
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+
+╔═══════════════════════════════════════════════════════════════╗
+                  Table-1: Top Inventory Holders
+╚═══════════════════════════════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table: Top 10 Dealers by Active Inventory (Highest Inventory Dealers)
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Identifies major stock holders
+► Benchmarks against leaders
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Sort by: active_inventory DESC using canonical_dealer_id
+► Columns: seller_name, city, state, street, zip, latitude, longitude, seller_phone, seller_email, dealer_type, source, website_provider, inventory_type
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Columns: Dealer Name, City/State, Active Inventory, Unique Models, Inventory Velocity [include seller_phone/email for contact insights]
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Leading inventory holders demonstrate high diversity, mitigating risks from slow-moving stock.
+
+                                🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                		
+╔═══════════════════════════════════════════════════════════════╗
+                 Table-2: Overstocked Dealers
+╚═══════════════════════════════════════════════════════════════╝
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table: Overstocked Dealers
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Highlights dealers at high risk of oversupply
+► Early warning for exposure
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Filter where (active_inventory / total_sales) > 1.3
+► Sort by ratio DESC
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Columns: Dealer Name, City/State, Active Inventory, Total Sales, Ratio
+► Risk indicators (e.g., 🔴)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Overstocked dealers in key regions signal potential price reductions to clear inventory.
+
+                                        🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+╔═══════════════════════════════════════════════════════════════╗
+               Table-3: Efficient Inventory Managers
+╚═══════════════════════════════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table: Efficient Inventory Managers
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Identifies high-turnover dealers
+► Benchmarks operational efficiency
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Sort by (total_sales / active_inventory) DESC (Inventory Velocity)
+► Filter for minimum inventory threshold if needed
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Columns: Dealer Name, City/State, Velocity, Active Inventory, Total Sales
+► Efficiency badges (e.g., 🟢)
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Efficient managers achieve high turnover, offering lessons in inventory optimization.
+
+                                      🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+
+╔═══════════════════════════════════════════════════════════════╗
+               Table-4: Top States by Inventory Opportunity
+╚═══════════════════════════════════════════════════════════════╝
+
+
+1. What we can do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Table/Chart: State Inventory Opportunity Index (Opportunity States)
+
+2. Why to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Pinpoints geographic inventory gaps
+► Guides regional strategies
+
+3. How to do?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Per state (from state column): Score = (total_sales / COUNT(DISTINCT canonical_dealer_id)) × (1 / (active_inventory / total_sales))
+► Use latitude/longitude for geo-mapping, city/zip/street for drill-down
+
+4. How we show it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► Bar chart or US map
+► Color-coded
+
+5. How LLM uses it?
+▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+
+► States like Florida show high inventory opportunity with efficient turnover, ideal for expansion.
+
+                                      🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟
+                                      
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+              DASHBOARD: LLM Inventory Summary 
+█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█ ◈ █▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█
+
+
+LLM INPUT:
+
+►  KPIs (Total Inventory, Inventory-to-Sales Ratio, Risk Dealer Percentage, Diversity Index, Top Make Concentration)
+►  Inventory by make/model
+►  Turnover pressure
+►  Concentration
+►  State Imbalance
+►  Top states
+
+LLM OUTPUT:
+
+Inventory levels are robust with a focus on popular makes, but slight oversupply relative to sales creates turnover challenges. Concentration among top dealers offers stability, while opportunities emerge in high-velocity states like Texas and California. A notable percentage of dealers face inventory risk, highlighting the need for targeted efficiency improvements.

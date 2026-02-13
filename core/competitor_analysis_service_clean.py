@@ -65,6 +65,8 @@ def _month_dirs(time_range: str) -> List[str]:
     tr = (time_range or "30d").strip().lower()
     if tr in ("30d", "30", "1m"):
         return ["Dec"]
+    if tr in ("60d", "60", "2m"):
+        return ["Nov", "Dec"]
     if tr in ("3m", "90d"):
         return ["Oct", "Nov", "Dec"]
     # Fallback: safest default is most recent month.
@@ -257,6 +259,7 @@ def get_total_sales(
 
     time_range:
     - 30d => Dec only
+    - 60d => Nov+Dec
     - 3m => Oct+Nov+Dec
     """
 
@@ -345,12 +348,94 @@ def get_dashboard_kpis(
     )
 
 
-def get_top_market_leaders(
+def get_sales_inventory_trend(
     scope: str = "USA",
     state: Optional[str] = None,
     time_range: str = "30d",
     exports_dir: Optional[str] = None,
-    limit: int = 10,
+) -> List[Dict]:
+    """Return month-by-month totals for sales and inventory.
+
+    This is used to power the Dashboard 'Sales vs Inventory Trend' chart.
+
+    The returned series follows the same month selection rules as other KPIs:
+    - 30d => Dec only
+    - 60d => Nov+Dec
+    - 3m  => Oct+Nov+Dec
+    """
+
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    totals: Dict[str, Tuple[float, float]] = {}
+    for m in months:
+        rows = _get_sales_rows_filtered(exports_root, [m], apply_state_filter, state_norm)
+        total_sales = 0.0
+        active_inventory = 0.0
+        for row in rows:
+            total_sales += _to_float(row.get("total_sales"))
+            active_inventory += _to_float(row.get("active_inventory"))
+        totals[m] = (total_sales, active_inventory)
+
+    full_axis = ["Oct", "Nov", "Dec"]
+    out: List[Dict] = []
+    for label in full_axis:
+        if label in totals:
+            s, inv = totals[label]
+            out.append({"name": label, "sales": s, "inventory": inv})
+        else:
+            out.append({"name": label, "sales": None, "inventory": None})
+
+    return out
+
+
+# ===============================
+# Inventory Analysis page APIs / functions start here
+# ===============================
+
+
+def _safe_text(v: object) -> str:
+    return ("" if v is None else str(v)).strip()
+
+
+def _pick_first(pipe_list: object) -> str:
+    s = _safe_text(pipe_list)
+    if not s:
+        return ""
+    for part in s.split("|"):
+        p = part.strip()
+        if p:
+            return p
+    return ""
+
+
+def _parse_pipe_nums(pipe_list: object) -> List[float]:
+    s = _safe_text(pipe_list)
+    if not s:
+        return []
+    out: List[float] = []
+    for part in s.split("|"):
+        out.append(_to_float(part))
+    return out
+
+
+def _ratio_tone(ratio: float) -> str:
+    if ratio < 0.9:
+        return "Tight"
+    if ratio <= 1.1:
+        return "Balanced"
+    return "Oversupply"
+
+
+def _inventory_analysis_dealer_rows(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
 ) -> List[Dict]:
     exports_root = _exports_root(exports_dir)
     months = _month_dirs(time_range)
@@ -359,51 +444,821 @@ def get_top_market_leaders(
     state_norm = (state or "").strip().upper()
     apply_state_filter = (sc == "state") or bool(state_norm)
 
-    totals: Dict[str, Dict[str, object]] = {}
-    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
-    for row in sales_rows:
+    rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
 
+    dealers = []
+    for d in rows:
+        sales = _to_float(d.get("total_sales"))
+        inv = _to_float(d.get("active_inventory"))
+        velocity = (sales / inv) if inv > 0 else 0.0
+        ratio = (inv / sales) if sales > 0 else 999999.0
+        unique_models = int(_to_float(d.get("unique_models_count")))
+
+        dealer_name = _pick_first(d.get("seller_name")) or _safe_text(d.get("canonical_dealer_id")) or "—"
+        city = _safe_text(d.get("city"))
+        st = _safe_text(d.get("state"))
+        city_state = f"{city}{(', ' + st) if st else ''}".strip() or "—"
+
+        dealers.append(
+            {
+                "canonical_dealer_id": _safe_text(d.get("canonical_dealer_id")),
+                "dealer": dealer_name,
+                "cityState": city_state,
+                "sales": sales,
+                "inventory": inv,
+                "inv": inv,
+                "ratio": ratio,
+                "velocity": velocity,
+                "uniqueModels": unique_models,
+                "state": st,
+            }
+        )
+
+    return dealers
+
+
+def get_inventory_analysis_top_inventory_holders(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    top_inventory = sorted(dealers, key=lambda r: float(r.get("inventory") or 0.0), reverse=True)[: max(1, int(limit or 10))]
+    max_top_inventory = max([float(r.get("inventory") or 0.0) for r in top_inventory], default=0.0)
+    return {"rows": top_inventory, "maxTopInventory": max_top_inventory}
+
+
+def get_inventory_analysis_overstocked_dealers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    overstocked = [r for r in dealers if float(r.get("sales") or 0.0) > 0 and float(r.get("ratio") or 0.0) > 1.3]
+    overstocked.sort(key=lambda r: float(r.get("ratio") or 0.0), reverse=True)
+    return {"rows": overstocked[: max(1, int(limit or 10))]}
+
+
+def get_inventory_analysis_understocked_dealers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    understocked = [r for r in dealers if float(r.get("sales") or 0.0) > 0 and float(r.get("ratio") or 0.0) < 0.7]
+    understocked.sort(key=lambda r: float(r.get("ratio") or 0.0))
+    return {"rows": understocked[: max(1, int(limit or 10))]}
+
+
+def get_inventory_analysis_efficient_managers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    # Keep "efficient" distinct from "understocked" / "overstocked" by focusing on near-balanced dealers,
+    # then ranking by velocity (sales ÷ inventory).
+    efficient = [
+        r
+        for r in dealers
+        if float(r.get("inv") or 0.0) > 0
+        and float(r.get("sales") or 0.0) > 0
+        and 0.9 <= float(r.get("ratio") or 0.0) <= 1.1
+    ]
+    efficient.sort(key=lambda r: float(r.get("velocity") or 0.0), reverse=True)
+    return {"rows": efficient[: max(1, int(limit or 10))]}
+
+
+def get_inventory_analysis_opportunity_states(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+
+    state_map: Dict[str, Dict[str, object]] = {}
+    for r in dealers:
+        st = (r.get("state") or "").strip().upper() or "Unknown"
+        if st == "Unknown":
+            continue
+        entry = state_map.get(st)
+        if not entry:
+            entry = {"dealerIds": set(), "sales": 0.0, "inv": 0.0}
+            state_map[st] = entry
+        did = (r.get("canonical_dealer_id") or "").strip()
+        if did:
+            entry["dealerIds"].add(did)
+        entry["sales"] = float(entry["sales"]) + float(r.get("sales") or 0.0)
+        entry["inv"] = float(entry["inv"]) + float(r.get("inv") or 0.0)
+
+    opp_rows = []
+    for st, v in state_map.items():
+        dealers_count = len(v.get("dealerIds") or [])
+        sales = float(v.get("sales") or 0.0)
+        inv = float(v.get("inv") or 0.0)
+        inv_sales = (inv / sales) if sales > 0 else 0.0
+        score = ((sales / dealers_count) * (1 / inv_sales)) if (dealers_count > 0 and sales > 0 and inv_sales > 0) else 0.0
+        opp_rows.append({"state": st, "dealers": dealers_count, "invSales": inv_sales, "score": score})
+    opp_rows.sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    return {"rows": opp_rows[: max(1, int(limit or 10))]}
+
+
+def get_inventory_analysis_territories(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+    rows = _get_sales_rows_filtered(exports_root, months, False, "")
+    state_set = set()
+    for row in rows:
+        st = (row.get("state") or "").strip().upper()
+        if st:
+            state_set.add(st)
+    return {"states": sorted(state_set)}
+
+
+def get_inventory_analysis_kpis_overview(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+
+    dealer_ids = set()
+    total_sales = 0.0
+    total_inventory = 0.0
+    total_unique_models = 0.0
+
+    risky = 0
+    risky_total = 0
+
+    sum_top_make_conc = 0.0
+    top_make_conc_count = 0
+
+    for row in sales_rows:
         dealer_id = (row.get("canonical_dealer_id") or "").strip() or (row.get("mc_dealer_id") or "").strip()
-        if not dealer_id:
+        if dealer_id:
+            dealer_ids.add(dealer_id)
+
+        s = _to_float(row.get("total_sales"))
+        inv = _to_float(row.get("active_inventory"))
+        total_sales += s
+        total_inventory += inv
+        total_unique_models += _to_float(row.get("unique_models_count"))
+
+        if inv > 0:
+            top5_inv = sum(_parse_pipe_nums(row.get("top_5_make_inventory")))
+            pct = (top5_inv / inv) * 100.0 if inv > 0 else 0.0
+            if 0 <= pct <= 100000:
+                sum_top_make_conc += pct
+                top_make_conc_count += 1
+
+        if dealer_id and not (inv <= 0 and s <= 0):
+            risky_total += 1
+            if s > 0 and (inv / s) > 1.3:
+                risky += 1
+
+    total_dealers = len(dealer_ids)
+    avg_inventory_per_dealer = (total_inventory / total_dealers) if total_dealers > 0 else 0.0
+    inv_sales_ratio = (total_inventory / total_sales) if total_sales > 0 else 0.0
+    avg_unique_models = (total_unique_models / total_dealers) if total_dealers > 0 else 0.0
+    risk_pct = (risky / risky_total) * 100.0 if risky_total > 0 else 0.0
+    top_make_conc_pct = (sum_top_make_conc / top_make_conc_count) if top_make_conc_count > 0 else 0.0
+
+    inv_values = [_to_float(r.get("active_inventory")) for r in sales_rows]
+    inv_values.sort(reverse=True)
+    top_count = max(1, int((len(inv_values) * 0.1) + 0.9999)) if inv_values else 1
+    top_inv = sum(inv_values[:top_count]) if inv_values else 0.0
+    inv_concentration = (top_inv / total_inventory) * 100.0 if total_inventory > 0 else 0.0
+
+    make_totals: Dict[str, float] = {}
+    model_totals: Dict[Tuple[str, str], float] = {}
+    segment_totals: Dict[str, float] = {}
+    body_style_map = _load_body_style_map(exports_root)
+
+    for row in sales_rows:
+        makes = [p.strip() for p in _safe_text(row.get("top_5_makes")).split("|") if p.strip()]
+        make_invs = _parse_pipe_nums(row.get("top_5_make_inventory"))
+        for i, mk in enumerate(makes):
+            make_totals[mk] = make_totals.get(mk, 0.0) + (make_invs[i] if i < len(make_invs) else 0.0)
+
+        models = [p.strip() for p in _safe_text(row.get("top_5_models")).split("|") if p.strip()]
+        model_invs = _parse_pipe_nums(row.get("top_5_model_inventory"))
+        for i, mdl in enumerate(models):
+            mk = makes[i] if i < len(makes) else ""
+            inv = model_invs[i] if i < len(model_invs) else 0.0
+            if mk and mdl:
+                model_totals[(mk, mdl)] = model_totals.get((mk, mdl), 0.0) + inv
+            bs = body_style_map.get((mk.lower(), mdl.lower()), "Other") if mk and mdl else "Other"
+            seg = _normalize_segment(bs)
+            segment_totals[seg] = segment_totals.get(seg, 0.0) + inv
+
+    top_make = max(make_totals.items(), key=lambda kv: kv[1])[0] if make_totals else None
+    top_segment = max(segment_totals.items(), key=lambda kv: kv[1])[0] if segment_totals else None
+
+    market_summary = (
+        f"The market consists of {total_dealers:,} active dealers with {int(round(total_sales)):,} vehicles sold and "
+        f"{int(round(total_inventory)):,} units in stock."
+    )
+
+    return {
+        "totalDealers": total_dealers,
+        "totalSales": total_sales,
+        "totalInventory": total_inventory,
+        "avgInventoryPerDealer": avg_inventory_per_dealer,
+        "invSalesRatio": inv_sales_ratio,
+        "avgUniqueModels": avg_unique_models,
+        "riskDealersPct": risk_pct,
+        "topMakeConcentrationPct": top_make_conc_pct,
+        "inventoryConcentrationPct": inv_concentration,
+        "marketSummary": market_summary,
+        "topMake": top_make,
+        "topSegment": top_segment,
+    }
+
+
+def get_inventory_analysis_health(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    health_under = 0
+    health_bal = 0
+    health_over = 0
+    health_total = 0
+
+    for r in dealers:
+        inv = float(r.get("inv") or 0.0)
+        sales = float(r.get("sales") or 0.0)
+        if inv == 0 and sales == 0:
+            continue
+        ratio = (inv / sales) if sales > 0 else 999999.0
+        if ratio < 0.9:
+            health_under += 1
+        elif ratio > 1.1:
+            health_over += 1
+        else:
+            health_bal += 1
+        health_total += 1
+
+    health_total_safe = health_total or 1
+    return {
+        "dealerHealth": {
+            "understock": health_under,
+            "balanced": health_bal,
+            "overstock": health_over,
+            "understockPct": (health_under / health_total_safe) * 100.0,
+            "balancedPct": (health_bal / health_total_safe) * 100.0,
+            "overstockPct": (health_over / health_total_safe) * 100.0,
+        }
+    }
+
+
+def get_inventory_analysis_chart_inventory_vs_sales_trend(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    trend = []
+    for m in months:
+        rows = _get_sales_rows_filtered(exports_root, [m], apply_state_filter, state_norm)
+        inv = 0.0
+        sales = 0.0
+        for r in rows:
+            inv += _to_float(r.get("active_inventory"))
+            sales += _to_float(r.get("total_sales"))
+        trend.append({"date": m, "inventory": inv, "sales": sales})
+    return {"inventoryVsSalesTrend": trend}
+
+
+def get_inventory_analysis_chart_make_mix(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    top_n: int = 10,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+    make_totals: Dict[str, float] = {}
+    for row in sales_rows:
+        makes = [p.strip() for p in _safe_text(row.get("top_5_makes")).split("|") if p.strip()]
+        make_invs = _parse_pipe_nums(row.get("top_5_make_inventory"))
+        for i, mk in enumerate(makes):
+            make_totals[mk] = make_totals.get(mk, 0.0) + (make_invs[i] if i < len(make_invs) else 0.0)
+
+    items = sorted(make_totals.items(), key=lambda kv: kv[1], reverse=True)[: max(1, int(top_n or 10))]
+    out = [{"name": k, "value": v} for k, v in items]
+    return {"makeMix": out}
+
+
+def get_inventory_analysis_chart_model_mix(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    top_n: int = 10,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+    model_totals: Dict[str, float] = {}
+    for row in sales_rows:
+        models = [p.strip() for p in _safe_text(row.get("top_5_models")).split("|") if p.strip()]
+        model_invs = _parse_pipe_nums(row.get("top_5_model_inventory"))
+        for i, mdl in enumerate(models):
+            model_totals[mdl] = model_totals.get(mdl, 0.0) + (model_invs[i] if i < len(model_invs) else 0.0)
+
+    items = sorted(model_totals.items(), key=lambda kv: kv[1], reverse=True)[: max(1, int(top_n or 10))]
+    out = [{"name": k, "value": v} for k, v in items]
+    return {"modelMix": out}
+
+
+def get_inventory_analysis_chart_inventory_by_state(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    top_n: int = 12,
+) -> Dict:
+    dealers = _inventory_analysis_dealer_rows(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    state_map: Dict[str, Dict[str, float]] = {}
+    for r in dealers:
+        st = (r.get("state") or "").strip().upper()
+        if not st:
+            continue
+        entry = state_map.get(st)
+        if not entry:
+            entry = {"inventory": 0.0, "sales": 0.0}
+            state_map[st] = entry
+        entry["inventory"] += float(r.get("inv") or 0.0)
+        entry["sales"] += float(r.get("sales") or 0.0)
+
+    rows = [{"name": st, "inventory": v["inventory"], "sales": v["sales"]} for st, v in state_map.items()]
+    rows.sort(key=lambda r: float(r.get("inventory") or 0.0), reverse=True)
+    return {"inventoryVsSalesByState": rows[: max(1, int(top_n or 12))]}
+
+
+def get_inventory_analysis_summary(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+
+    dealer_ids = set()
+    total_sales = 0.0
+    total_inventory = 0.0
+    total_unique_models = 0.0
+
+    # Inventory health buckets
+    health_under = 0
+    health_bal = 0
+    health_over = 0
+    health_total = 0
+
+    risky = 0
+    risky_total = 0
+
+    # For top-make concentration metric: avg over dealers of (top-5-make-inventory / inventory)
+    sum_top_make_conc = 0.0
+    top_make_conc_count = 0
+
+    state_set = set()
+
+    for row in sales_rows:
+        dealer_id = (row.get("canonical_dealer_id") or "").strip() or (row.get("mc_dealer_id") or "").strip()
+        if dealer_id:
+            dealer_ids.add(dealer_id)
+
+        st = (row.get("state") or "").strip().upper()
+        if st:
+            state_set.add(st)
+
+        s = _to_float(row.get("total_sales"))
+        inv = _to_float(row.get("active_inventory"))
+        total_sales += s
+        total_inventory += inv
+        total_unique_models += _to_float(row.get("unique_models_count"))
+
+        if inv > 0:
+            top5_inv = sum(_parse_pipe_nums(row.get("top_5_make_inventory")))
+            pct = (top5_inv / inv) * 100.0 if inv > 0 else 0.0
+            if pct >= 0 and pct <= 100000:
+                sum_top_make_conc += pct
+                top_make_conc_count += 1
+
+        if inv == 0 and s == 0:
             continue
 
-        cur = totals.get(dealer_id)
+        ratio = (inv / s) if s > 0 else 999999.0
+        if ratio < 0.9:
+            health_under += 1
+        elif ratio > 1.1:
+            health_over += 1
+        else:
+            health_bal += 1
+        health_total += 1
+
+        if dealer_id and not (inv <= 0 and s <= 0):
+            risky_total += 1
+            if s > 0 and (inv / s) > 1.3:
+                risky += 1
+
+    total_dealers = len(dealer_ids)
+    avg_inventory_per_dealer = (total_inventory / total_dealers) if total_dealers > 0 else 0.0
+    inv_sales_ratio = (total_inventory / total_sales) if total_sales > 0 else 0.0
+    avg_unique_models = (total_unique_models / total_dealers) if total_dealers > 0 else 0.0
+    risk_pct = (risky / risky_total) * 100.0 if risky_total > 0 else 0.0
+    top_make_conc_pct = (sum_top_make_conc / top_make_conc_count) if top_make_conc_count > 0 else 0.0
+
+    health_total_safe = health_total or 1
+    dealer_health = {
+        "understock": health_under,
+        "balanced": health_bal,
+        "overstock": health_over,
+        "understockPct": (health_under / health_total_safe) * 100.0,
+        "balancedPct": (health_bal / health_total_safe) * 100.0,
+        "overstockPct": (health_over / health_total_safe) * 100.0,
+    }
+
+    # Inventory concentration: top 10% dealers hold what % of total inventory?
+    inv_values = []
+    for row in sales_rows:
+        inv_values.append(_to_float(row.get("active_inventory")))
+    inv_values.sort(reverse=True)
+    top_count = max(1, int((len(inv_values) * 0.1) + 0.9999)) if inv_values else 1
+    top_inv = sum(inv_values[:top_count]) if inv_values else 0.0
+    inv_concentration = (top_inv / total_inventory) * 100.0 if total_inventory > 0 else 0.0
+
+    # Top make + top segment (inventory) from dealer rows (uses top_5* fields)
+    make_totals: Dict[str, float] = {}
+    model_totals: Dict[Tuple[str, str], float] = {}
+    segment_totals: Dict[str, float] = {}
+    body_style_map = _load_body_style_map(exports_root)
+
+    for row in sales_rows:
+        makes = [p.strip() for p in _safe_text(row.get("top_5_makes")).split("|") if p.strip()]
+        make_invs = _parse_pipe_nums(row.get("top_5_make_inventory"))
+        for i, mk in enumerate(makes):
+            make_totals[mk] = make_totals.get(mk, 0.0) + (make_invs[i] if i < len(make_invs) else 0.0)
+
+        models = [p.strip() for p in _safe_text(row.get("top_5_models")).split("|") if p.strip()]
+        model_invs = _parse_pipe_nums(row.get("top_5_model_inventory"))
+        for i, mdl in enumerate(models):
+            mk = makes[i] if i < len(makes) else ""
+            inv = model_invs[i] if i < len(model_invs) else 0.0
+            if mk and mdl:
+                model_totals[(mk, mdl)] = model_totals.get((mk, mdl), 0.0) + inv
+            # segment from body style mapping
+            bs = body_style_map.get((mk.lower(), mdl.lower()), "Other") if mk and mdl else "Other"
+            seg = _normalize_segment(bs)
+            segment_totals[seg] = segment_totals.get(seg, 0.0) + inv
+
+    top_make = max(make_totals.items(), key=lambda kv: kv[1])[0] if make_totals else None
+    top_segment = max(segment_totals.items(), key=lambda kv: kv[1])[0] if segment_totals else None
+
+    pressure_label = _ratio_tone(inv_sales_ratio)
+
+    market_summary = (
+        f"The market consists of {total_dealers:,} active dealers with {int(round(total_sales)):,} vehicles sold and "
+        f"{int(round(total_inventory)):,} units in stock."
+    )
+
+    return {
+        "totalDealers": total_dealers,
+        "totalSales": total_sales,
+        "totalInventory": total_inventory,
+        "avgInventoryPerDealer": avg_inventory_per_dealer,
+        "invSalesRatio": inv_sales_ratio,
+        "avgUniqueModels": avg_unique_models,
+        "riskDealersPct": risk_pct,
+        "topMakeConcentrationPct": top_make_conc_pct,
+        "inventoryConcentrationPct": inv_concentration,
+        "dealerHealth": dealer_health,
+        "pressureLabel": pressure_label,
+        "marketSummary": market_summary,
+        "topMake": top_make,
+        "topSegment": top_segment,
+        "states": sorted(state_set),
+    }
+
+
+def get_inventory_analysis_structure_trends(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    top_n: int = 10,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    # Inventory vs sales trend (aggregate per month)
+    trend = []
+    for m in months:
+        rows = _get_sales_rows_filtered(exports_root, [m], apply_state_filter, state_norm)
+        inv = 0.0
+        sales = 0.0
+        for r in rows:
+            inv += _to_float(r.get("active_inventory"))
+            sales += _to_float(r.get("total_sales"))
+        trend.append({"date": m, "inventory": inv, "sales": sales})
+
+    # Mix charts from dealer rows using top_5 fields (inventory)
+    make_totals: Dict[str, float] = {}
+    model_totals: Dict[str, float] = {}
+    segment_totals: Dict[str, float] = {}
+    body_style_map = _load_body_style_map(exports_root)
+
+    sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+    for row in sales_rows:
+        makes = [p.strip() for p in _safe_text(row.get("top_5_makes")).split("|") if p.strip()]
+        make_invs = _parse_pipe_nums(row.get("top_5_make_inventory"))
+        for i, mk in enumerate(makes):
+            make_totals[mk] = make_totals.get(mk, 0.0) + (make_invs[i] if i < len(make_invs) else 0.0)
+
+        models = [p.strip() for p in _safe_text(row.get("top_5_models")).split("|") if p.strip()]
+        model_invs = _parse_pipe_nums(row.get("top_5_model_inventory"))
+        for i, mdl in enumerate(models):
+            inv = model_invs[i] if i < len(model_invs) else 0.0
+            model_totals[mdl] = model_totals.get(mdl, 0.0) + inv
+
+            mk = makes[i] if i < len(makes) else ""
+            bs = body_style_map.get((mk.lower(), mdl.lower()), "Other") if mk and mdl else "Other"
+            seg = _normalize_segment(bs)
+            segment_totals[seg] = segment_totals.get(seg, 0.0) + inv
+
+    make_mix = sorted(
+        [{"name": k, "value": v} for k, v in make_totals.items()], key=lambda r: float(r.get("value") or 0.0), reverse=True
+    )[: max(1, int(top_n or 10))]
+    model_mix = sorted(
+        [{"name": k, "value": v} for k, v in model_totals.items()], key=lambda r: float(r.get("value") or 0.0), reverse=True
+    )[: max(1, int(top_n or 10))]
+    segment_mix = [{"name": seg, "value": segment_totals.get(seg, 0.0)} for seg in SEGMENT_ORDER]
+
+    # Inventory vs sales by state
+    by_state: Dict[str, Dict[str, float]] = {}
+    for row in sales_rows:
+        st = (row.get("state") or "").strip().upper()
+        if not st:
+            continue
+        cur = by_state.get(st)
         if not cur:
-            cur = {
-                "dealer_id": dealer_id,
-                "dealer_name": (row.get("seller_name") or "").strip(),
-                "city": (row.get("city") or "").strip(),
-                "state": (row.get("state") or "").strip(),
-                "make": "",
-                "total_sales": 0.0,
-                "active_inventory": 0.0,
-                "unique_models": 0.0,
+            cur = {"inventory": 0.0, "sales": 0.0}
+            by_state[st] = cur
+        cur["inventory"] = float(cur["inventory"]) + _to_float(row.get("active_inventory"))
+        cur["sales"] = float(cur["sales"]) + _to_float(row.get("total_sales"))
+
+    by_state_rows = [
+        {"name": st, "inventory": float(v.get("inventory") or 0.0), "sales": float(v.get("sales") or 0.0)}
+        for st, v in by_state.items()
+    ]
+    by_state_rows.sort(key=lambda r: float(r.get("inventory") or 0.0), reverse=True)
+
+    return {
+        "inventoryVsSalesTrend": trend,
+        "makeMix": make_mix,
+        "modelMix": model_mix,
+        "segmentMix": segment_mix,
+        "inventoryVsSalesByState": by_state_rows[:12],
+    }
+
+
+def get_inventory_analysis_leaders(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> Dict:
+    exports_root = _exports_root(exports_dir)
+    months = _month_dirs(time_range)
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+
+    dealers = []
+    for d in rows:
+        sales = _to_float(d.get("total_sales"))
+        inv = _to_float(d.get("active_inventory"))
+        velocity = (sales / inv) if inv > 0 else 0.0
+        ratio = (inv / sales) if sales > 0 else 999999.0
+        unique_models = int(_to_float(d.get("unique_models_count")))
+
+        dealer_name = _pick_first(d.get("seller_name")) or _safe_text(d.get("canonical_dealer_id")) or "—"
+        city = _safe_text(d.get("city"))
+        st = _safe_text(d.get("state"))
+        city_state = f"{city}{(', ' + st) if st else ''}".strip() or "—"
+
+        dealers.append(
+            {
+                "canonical_dealer_id": _safe_text(d.get("canonical_dealer_id")),
+                "dealer": dealer_name,
+                "cityState": city_state,
+                "sales": sales,
+                "inventory": inv,
+                "inv": inv,
+                "ratio": ratio,
+                "velocity": velocity,
+                "uniqueModels": unique_models,
+                "state": st,
             }
-            totals[dealer_id] = cur
+        )
 
-        if not cur.get("make"):
-            makes_raw = (row.get("top_5_makes") or "").strip()
-            first_make = makes_raw.split("|")[0].split(",")[0].strip() if makes_raw else ""
-            cur["make"] = first_make
+    # Top inventory holders
+    top_inventory = sorted(dealers, key=lambda r: float(r.get("inventory") or 0.0), reverse=True)[: max(1, int(limit or 10))]
+    max_top_inventory = max([float(r.get("inventory") or 0.0) for r in top_inventory], default=0.0)
 
-        cur["total_sales"] = float(cur["total_sales"]) + _to_float(row.get("total_sales"))
-        cur["active_inventory"] = float(cur["active_inventory"]) + _to_float(row.get("active_inventory"))
-        cur["unique_models"] = max(float(cur["unique_models"]), _to_float(row.get("unique_models_count")))
+    # Overstocked dealers (Inv/Sales > 1.3)
+    overstocked = [r for r in dealers if float(r.get("sales") or 0.0) > 0 and float(r.get("ratio") or 0.0) > 1.3]
+    overstocked.sort(key=lambda r: float(r.get("ratio") or 0.0), reverse=True)
+    overstocked = overstocked[: max(1, int(limit or 10))]
 
-    leaders = list(totals.values())
+    # Efficient inventory managers (highest sales/inv)
+    efficient = [r for r in dealers if float(r.get("inv") or 0.0) > 0]
+    efficient.sort(key=lambda r: float(r.get("velocity") or 0.0), reverse=True)
+    efficient = efficient[: max(1, int(limit or 10))]
+
+    # Opportunity by state (same logic as InventoryAnalysis.jsx)
+    state_map: Dict[str, Dict[str, object]] = {}
+    for r in dealers:
+        st = (r.get("state") or "").strip().upper() or "Unknown"
+        if st == "Unknown":
+            continue
+        entry = state_map.get(st)
+        if not entry:
+            entry = {"dealerIds": set(), "sales": 0.0, "inv": 0.0}
+            state_map[st] = entry
+        did = (r.get("canonical_dealer_id") or "").strip()
+        if did:
+            entry["dealerIds"].add(did)
+        entry["sales"] = float(entry["sales"]) + float(r.get("sales") or 0.0)
+        entry["inv"] = float(entry["inv"]) + float(r.get("inv") or 0.0)
+
+    opp_rows = []
+    for st, v in state_map.items():
+        dealers_count = len(v.get("dealerIds") or [])
+        sales = float(v.get("sales") or 0.0)
+        inv = float(v.get("inv") or 0.0)
+        inv_sales = (inv / sales) if sales > 0 else 0.0
+        score = ((sales / dealers_count) * (1 / inv_sales)) if (dealers_count > 0 and sales > 0 and inv_sales > 0) else 0.0
+        opp_rows.append({"state": st, "dealers": dealers_count, "invSales": inv_sales, "score": score})
+    opp_rows.sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    opp_rows = opp_rows[: max(1, int(limit or 10))]
+
+    return {
+        "topInventoryHolders": top_inventory,
+        "overstockedDealers": overstocked,
+        "efficientManagers": efficient,
+        "opportunityStates": opp_rows,
+        "maxTopInventory": max_top_inventory,
+    }
+
+
+def get_top_market_leaders(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    exports_dir: Optional[str] = None,
+    limit: int = 10,
+) -> List[Dict]:
+    exports_root = _exports_root(exports_dir)
+    months_all = _month_dirs(time_range)
+
+    last_month = months_all[-1] if months_all else "Dec"
+    months_last30 = [last_month]
+    months_last3m = months_all[-3:] if len(months_all) >= 3 else (months_all if months_all else [last_month])
+
+    prev_month = None
+    if last_month == "Dec":
+        prev_month = "Nov"
+    elif last_month == "Nov":
+        prev_month = "Oct"
+    elif len(months_all) > 1:
+        prev_month = months_all[-2]
+
+    sc = (scope or "USA").strip().lower()
+    state_norm = (state or "").strip().upper()
+    apply_state_filter = (sc == "state") or bool(state_norm)
+
+    def load_totals(months: List[str]) -> Dict[str, Dict[str, object]]:
+        totals: Dict[str, Dict[str, object]] = {}
+        sales_rows = _get_sales_rows_filtered(exports_root, months, apply_state_filter, state_norm)
+        for row in sales_rows:
+            dealer_id = (row.get("canonical_dealer_id") or "").strip() or (row.get("mc_dealer_id") or "").strip()
+            if not dealer_id:
+                continue
+
+            cur = totals.get(dealer_id)
+            if not cur:
+                cur = {
+                    "dealer_id": dealer_id,
+                    "dealer_name": (row.get("seller_name") or "").strip(),
+                    "city": (row.get("city") or "").strip(),
+                    "state": (row.get("state") or "").strip(),
+                    "make": "",
+                    "total_sales": 0.0,
+                    "active_inventory": 0.0,
+                    "unique_models": 0.0,
+                }
+                totals[dealer_id] = cur
+
+            if not cur.get("make"):
+                makes_raw = (row.get("top_5_makes") or "").strip()
+                first_make = makes_raw.split("|")[0].split(",")[0].strip() if makes_raw else ""
+                cur["make"] = first_make
+
+            cur["total_sales"] = float(cur["total_sales"]) + _to_float(row.get("total_sales"))
+            cur["active_inventory"] = float(cur["active_inventory"]) + _to_float(row.get("active_inventory"))
+            cur["unique_models"] = max(float(cur["unique_models"]), _to_float(row.get("unique_models_count")))
+
+        return totals
+
+    totals_all = load_totals(months_all)
+    totals_last30 = load_totals(months_last30)
+    totals_last3m = load_totals(months_last3m)
+    totals_prev = load_totals([prev_month]) if prev_month else {}
+
+    leaders = list(totals_all.values())
     leaders.sort(key=lambda d: float(d.get("total_sales") or 0.0), reverse=True)
     leaders = leaders[: max(1, int(limit or 10))]
 
     out = []
     for d in leaders:
+        dealer_id = (d.get("dealer_id") or "").strip()
         inv = float(d.get("active_inventory") or 0.0)
         sales = float(d.get("total_sales") or 0.0)
+        sales_last30 = float((totals_last30.get(dealer_id) or {}).get("total_sales") or 0.0)
+        sales_last3m = float((totals_last3m.get(dealer_id) or {}).get("total_sales") or 0.0)
+        sales_prev = float((totals_prev.get(dealer_id) or {}).get("total_sales") or 0.0)
+        mom = ((sales_last30 - sales_prev) / sales_prev * 100.0) if sales_prev > 0 else 0.0
         out.append(
             {
                 "dealerName": d.get("dealer_name") or d.get("dealer_id"),
                 "make": d.get("make") or "",
                 "location": f"{d.get('city')}, {d.get('state')}",
                 "totalSales": sales,
+                "mom": mom,
+                "last30": sales_last30,
+                "last3m": sales_last3m,
                 "activeInventory": inv,
                 "uniqueModels": int(float(d.get("unique_models") or 0.0)),
                 "salesVelocity": (sales / inv) if inv > 0 else 0.0,

@@ -14,7 +14,7 @@ const TerritoryFilters = ({
   }
 
   return (
-    <div className="bg-white rounded-2xl p-2 border border-gray-100">
+    <div className="bg-white rounded-2xl p-1.5 border border-gray-100">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
@@ -27,7 +27,7 @@ const TerritoryFilters = ({
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-2">
         <label className="block min-w-0">
           <div className="text-[11px] text-slate-500">Territory</div>
           <select
@@ -40,7 +40,7 @@ const TerritoryFilters = ({
                 set({ scope: 'State', state: v })
               }
             }}
-            className="mt-1 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+            className="mt-1 w-full text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-300"
           >
             <option value="USA">(National)</option>
             {states.map((s) => (
@@ -54,9 +54,10 @@ const TerritoryFilters = ({
           <select
             value={dateRange}
             onChange={(e) => set({ dateRange: e.target.value })}
-            className="mt-1 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+            className="mt-1 w-full text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-300"
           >
             <option value="30d">Last 30 days</option>
+            <option value="60d">Last 60 days</option>
             <option value="3m">Last 3 months</option>
           </select>
         </label>

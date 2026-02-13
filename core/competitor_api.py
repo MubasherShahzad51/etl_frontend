@@ -16,7 +16,23 @@ from core.competitor_analysis_service_clean import (
     get_dashboard_kpis,
     get_fastest_rising_dealers,
     get_market_highlights,
+    get_sales_inventory_trend,
     get_segment_share_of_sales,
+    get_inventory_analysis_summary,
+    get_inventory_analysis_structure_trends,
+    get_inventory_analysis_leaders,
+    get_inventory_analysis_top_inventory_holders,
+    get_inventory_analysis_overstocked_dealers,
+    get_inventory_analysis_understocked_dealers,
+    get_inventory_analysis_efficient_managers,
+    get_inventory_analysis_opportunity_states,
+    get_inventory_analysis_territories,
+    get_inventory_analysis_kpis_overview,
+    get_inventory_analysis_health,
+    get_inventory_analysis_chart_inventory_vs_sales_trend,
+    get_inventory_analysis_chart_make_mix,
+    get_inventory_analysis_chart_model_mix,
+    get_inventory_analysis_chart_inventory_by_state,
     get_market_direction,
     get_opportunities_risk,
     get_recent_activity,
@@ -130,6 +146,355 @@ def dashboard_top_market_leaders(
         exports_dir=exports_dir,
         limit=limit,
     )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        "rows": rows,
+    }
+
+
+## @app.get("/inventory_analysis/summary")
+## def inventory_analysis_summary(
+##     scope: str = "USA",
+##     state: Optional[str] = None,
+##     time_range: str = "30d",
+##     _: None = Depends(_require_basic_auth),
+## ):
+##     exports_dir = os.getenv("EXPORTS_DIR")
+##     data = get_inventory_analysis_summary(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+##     return {
+##         "success": True,
+##         "scope": scope,
+##         "state": state,
+##         "time_range": time_range,
+##         **(data or {}),
+##     }
+
+
+## @app.get("/inventory_analysis/structure_trends")
+## def inventory_analysis_structure_trends(
+##     scope: str = "USA",
+##     state: Optional[str] = None,
+##     time_range: str = "30d",
+##     top_n: int = 10,
+##     _: None = Depends(_require_basic_auth),
+## ):
+##     exports_dir = os.getenv("EXPORTS_DIR")
+##     data = get_inventory_analysis_structure_trends(
+##         scope=scope,
+##         state=state,
+##         time_range=time_range,
+##         exports_dir=exports_dir,
+##         top_n=top_n,
+##     )
+##     return {
+##         "success": True,
+##         "scope": scope,
+##         "state": state,
+##         "time_range": time_range,
+##         **(data or {}),
+##     }
+
+
+## @app.get("/inventory_analysis/leaders")
+## def inventory_analysis_leaders(
+##     scope: str = "USA",
+##     state: Optional[str] = None,
+##     time_range: str = "30d",
+##     limit: int = 10,
+##     _: None = Depends(_require_basic_auth),
+## ):
+##     # Deprecated: replaced by per-component endpoints below.
+##     exports_dir = os.getenv("EXPORTS_DIR")
+##     data = get_inventory_analysis_leaders(
+##         scope=scope,
+##         state=state,
+##         time_range=time_range,
+##         exports_dir=exports_dir,
+##         limit=limit,
+##     )
+##     return {
+##         "success": True,
+##         "scope": scope,
+##         "state": state,
+##         "time_range": time_range,
+##         **(data or {}),
+##     }
+
+
+# ===============================
+# Inventory Analysis component APIs start here
+# ===============================
+
+
+@app.get("/inventory_analysis/territories")
+def inventory_analysis_territories(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_territories(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/kpis_overview")
+def inventory_analysis_kpis_overview(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_kpis_overview(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/health")
+def inventory_analysis_health(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_health(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/chart_inventory_vs_sales_trend")
+def inventory_analysis_chart_inventory_vs_sales_trend(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_chart_inventory_vs_sales_trend(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/chart_make_mix")
+def inventory_analysis_chart_make_mix(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    top_n: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_chart_make_mix(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir, top_n=top_n)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        "top_n": top_n,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/chart_model_mix")
+def inventory_analysis_chart_model_mix(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    top_n: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_chart_model_mix(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir, top_n=top_n)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        "top_n": top_n,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/chart_inventory_by_state")
+def inventory_analysis_chart_inventory_by_state(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    top_n: int = 12,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_chart_inventory_by_state(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir, top_n=top_n)
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        "top_n": top_n,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/top_inventory_holders")
+def inventory_analysis_top_inventory_holders(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    limit: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_top_inventory_holders(
+        scope=scope,
+        state=state,
+        time_range=time_range,
+        exports_dir=exports_dir,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/overstocked_dealers")
+def inventory_analysis_overstocked_dealers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    limit: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_overstocked_dealers(
+        scope=scope,
+        state=state,
+        time_range=time_range,
+        exports_dir=exports_dir,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/understocked_dealers")
+def inventory_analysis_understocked_dealers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    limit: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_understocked_dealers(
+        scope=scope,
+        state=state,
+        time_range=time_range,
+        exports_dir=exports_dir,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/efficient_managers")
+def inventory_analysis_efficient_managers(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    limit: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_efficient_managers(
+        scope=scope,
+        state=state,
+        time_range=time_range,
+        exports_dir=exports_dir,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/inventory_analysis/opportunity_states")
+def inventory_analysis_opportunity_states(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    limit: int = 10,
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    data = get_inventory_analysis_opportunity_states(
+        scope=scope,
+        state=state,
+        time_range=time_range,
+        exports_dir=exports_dir,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "scope": scope,
+        "state": state,
+        "time_range": time_range,
+        **(data or {}),
+    }
+
+
+@app.get("/dashboard/sales_inventory_trend")
+def dashboard_sales_inventory_trend(
+    scope: str = "USA",
+    state: Optional[str] = None,
+    time_range: str = "30d",
+    _: None = Depends(_require_basic_auth),
+):
+    exports_dir = os.getenv("EXPORTS_DIR")
+    rows = get_sales_inventory_trend(scope=scope, state=state, time_range=time_range, exports_dir=exports_dir)
     return {
         "success": True,
         "scope": scope,

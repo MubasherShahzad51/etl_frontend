@@ -30,12 +30,12 @@ const DataTable = ({
   // Sort data
   const sortedData = [...data].sort((a, b) => {
     if (!sortColumn) return 0
-    
+
     const aVal = a[sortColumn]
     const bVal = b[sortColumn]
-    
+
     if (aVal === bVal) return 0
-    
+
     const comparison = aVal > bVal ? 1 : -1
     return sortDirection === 'asc' ? comparison : -comparison
   })
@@ -64,11 +64,11 @@ const DataTable = ({
     ? `px-2 py-1.5 text-[9.5px] font-bold text-gray-600 uppercase tracking-wide border-b border-gray-200${isFixed ? ' whitespace-normal break-words leading-tight' : ''}`
     : 'px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200'
   const bodyCell = isCompact
-    ? `px-2 py-1.5 text-[10px] text-gray-700${isFixed ? ' truncate' : ''}`
+    ? `px-2 py-1.5 text-[10px] text-gray-700${isFixed ? ' whitespace-normal break-words leading-tight' : ''}`
     : 'px-6 py-4 text-sm text-gray-700'
   const iconSize = isCompact ? 'w-2.5 h-2.5' : 'w-3 h-3'
   const tableClass = `w-full ${isFixed ? 'table-fixed' : ''}`
-  const scrollClass = isFixed ? 'overflow-x-hidden' : 'overflow-x-auto'
+  const scrollClass = 'overflow-x-hidden'
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -80,26 +80,23 @@ const DataTable = ({
                 <th
                   key={column.key}
                   onClick={() => handleSort(column)}
-                  className={`${headerCell} ${
-                    sortable && column.sortable !== false 
-                      ? 'cursor-pointer hover:bg-gray-100 transition-colors select-none' 
-                      : ''
-                  }`}
+                  className={`${headerCell} ${column.className || ''} ${sortable && column.sortable !== false
+                    ? 'cursor-pointer hover:bg-gray-100 transition-colors select-none'
+                    : ''
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>{column.label}</span>
                     {sortable && column.sortable !== false && (
                       <div className="flex flex-col">
-                        <ChevronUp className={`${iconSize} -mb-1 transition-colors ${
-                          sortColumn === column.key && sortDirection === 'asc' 
-                            ? 'text-primary-500' 
-                            : 'text-gray-300'
-                        }`} />
-                        <ChevronDown className={`${iconSize} transition-colors ${
-                          sortColumn === column.key && sortDirection === 'desc' 
-                            ? 'text-primary-500' 
-                            : 'text-gray-300'
-                        }`} />
+                        <ChevronUp className={`${iconSize} -mb-1 transition-colors ${sortColumn === column.key && sortDirection === 'asc'
+                          ? 'text-primary-500'
+                          : 'text-gray-300'
+                          }`} />
+                        <ChevronDown className={`${iconSize} transition-colors ${sortColumn === column.key && sortDirection === 'desc'
+                          ? 'text-primary-500'
+                          : 'text-gray-300'
+                          }`} />
                       </div>
                     )}
                   </div>
@@ -112,18 +109,16 @@ const DataTable = ({
               <tr
                 key={row.id || rowIndex}
                 onClick={() => onRowClick?.(row)}
-                className={`group transition-all duration-200 ${
-                  onRowClick 
-                    ? 'cursor-pointer hover:bg-primary-50/50' 
-                    : 'hover:bg-gray-50'
-                }`}
+                className={`group transition-all duration-200 ${onRowClick
+                  ? 'cursor-pointer hover:bg-primary-50/50'
+                  : 'hover:bg-gray-50'
+                  }`}
               >
                 {columns.map((column, colIndex) => (
-                  <td 
-                    key={column.key} 
-                    className={`${bodyCell} ${
-                      colIndex === 0 ? 'font-medium' : ''
-                    }`}
+                  <td
+                    key={column.key}
+                    className={`${bodyCell} ${colIndex === 0 ? 'font-medium' : ''
+                      } ${column.cellClassName || ''}`}
                   >
                     {column.render ? column.render(row[column.key], row) : row[column.key]}
                   </td>
@@ -142,7 +137,7 @@ const DataTable = ({
             <span className="font-semibold text-gray-700">{Math.min(currentPage * pageSize, data.length)}</span> of{' '}
             <span className="font-semibold text-gray-700">{data.length}</span> results
           </p>
-          
+
           <div className="flex items-center gap-1">
             {/* First page */}
             <button
@@ -152,7 +147,7 @@ const DataTable = ({
             >
               <ChevronsLeft className="w-4 h-4 text-gray-500" />
             </button>
-            
+
             {/* Previous */}
             <button
               onClick={() => goToPage(currentPage - 1)}
@@ -179,11 +174,10 @@ const DataTable = ({
                   <button
                     key={pageNum}
                     onClick={() => goToPage(pageNum)}
-                    className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                      currentPage === pageNum
-                        ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
-                        : 'hover:bg-white hover:shadow-sm text-gray-600'
-                    }`}
+                    className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200 ${currentPage === pageNum
+                      ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
+                      : 'hover:bg-white hover:shadow-sm text-gray-600'
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -199,7 +193,7 @@ const DataTable = ({
             >
               <ChevronRight className="w-4 h-4 text-gray-500" />
             </button>
-            
+
             {/* Last page */}
             <button
               onClick={() => goToPage(totalPages)}

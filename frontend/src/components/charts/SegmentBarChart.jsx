@@ -9,7 +9,7 @@ import {
   Cell,
 } from 'recharts'
 
-const COLORS = ['#6366f1', '#0ea5e9', '#f59e0b', '#22c55e', '#f43f5e', '#a21caf', '#e11d48', '#0d9488', '#facc15', '#64748b']
+const COLORS = ['#4f46e5', '#0284c7', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#14b8a6', '#22c55e', '#fb7185', '#64748b']
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -44,7 +44,7 @@ const SegmentBarChart = ({ data, title = 'Segment Distribution', compact = false
             <CartesianGrid strokeDasharray="2 2" stroke="#f1f5f9" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fill: '#374151', fontSize: compact ? 10 : 13, fontWeight: 600 }}
+              tick={{ fill: '#334155', fontSize: compact ? 10 : 13, fontWeight: 600 }}
               tickLine={false}
               axisLine={false}
               interval={0}
@@ -54,10 +54,10 @@ const SegmentBarChart = ({ data, title = 'Segment Distribution', compact = false
             />
             <YAxis
               dataKey="value"
-              tick={{ fill: '#6b7280', fontSize: compact ? 11 : 15, fontWeight: 700 }}
+              tick={{ fill: '#64748b', fontSize: compact ? 11 : 15, fontWeight: 700 }}
               tickLine={false}
               axisLine={{ stroke: '#e5e7eb' }}
-              tickFormatter={(value) => value >= 1000 ? `${(value/1000).toFixed(0)}k` : value}
+              tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
               width={compact ? 40 : 60}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
